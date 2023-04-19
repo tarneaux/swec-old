@@ -1,24 +1,19 @@
 mod monitor;
-use monitor::Watcher;
+use monitor::{OKWhen, ServiceWatcher};
 use std::time::Duration;
+use tokio::time::sleep;
 
 #[tokio::main]
 async fn main() {
-    let url = "https://www.google.com";
-    let mut service = Watcher::new(
-        url.to_string(),
-        200,
-        10,
-        Duration::from_secs(1),
-        Duration::from_secs(1),
+    let mut watcher = ServiceWatcher::new(
+        "http://google.com",
+        Duration::from_secs(5),
+        OKWhen::Status(200),
     );
-    service.check_health().await;
-    let last_check = service.get_last_check();
-    match last_check {
-        Some(check) => match check.get_ping() {
-            Some(ping) => println!("Ping: {}", ping),
-            None => println!("No ping"),
-        },
-        None => println!("No checks"),
+
+    loop {
+        let status = watcher.get_current_status().await;
+        println!("Status: {:?}", status);
+        sleep(Duration::from_secs(1)).await;
     }
 }
