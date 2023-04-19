@@ -6,7 +6,7 @@ use tokio::time::sleep;
 #[tokio::main]
 async fn main() {
     let mut watcher = ServiceWatcher::new(
-        "http://google.com",
+        "http://github.com/tarneaarstarst/",
         Duration::from_secs(5),
         OKWhen::Status(200),
     );

@@ -10,23 +10,32 @@ pub struct ServiceWatcher {
 
 pub enum Status {
     Online(Duration),
-    Offline,
-}
-
-impl Clone for Status {
-    fn clone(&self) -> Self {
-        match self {
-            Status::Online(d) => Status::Online(*d),
-            Status::Offline => Status::Offline,
-        }
-    }
+    Offline(ErrorType),
 }
 
 impl Debug for Status {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Status::Online(d) => write!(f, "Online({:?})", d),
-            Status::Offline => write!(f, "Offline"),
+            Status::Offline(e) => write!(f, "Offline: {:?}", e),
+        }
+    }
+}
+
+pub enum ErrorType {
+    Timeout,
+    WrongStatus,
+    WrongDom,
+    Unknown(String),
+}
+
+impl Debug for ErrorType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ErrorType::Timeout => write!(f, "Timeout"),
+            ErrorType::WrongStatus => write!(f, "Wrong status code"),
+            ErrorType::WrongDom => write!(f, "Wrong dom"),
+            ErrorType::Unknown(e) => write!(f, "Unknown error from reqwest (see https://dtantsur.github.io/rust-openstack/reqwest/struct.Error.html): {}", e),
         }
     }
 }
@@ -47,28 +56,31 @@ impl ServiceWatcher {
     pub async fn get_current_status(&mut self) -> Status {
         let res = self.get_url().await;
         match res {
-            Some((res, duration)) => {
-                let status = self.verify_status_or_dom(res).await;
-                match &status {
-                    Status::Online(_) => Status::Online(duration),
-                    Status::Offline => Status::Offline,
+            Ok((res, duration)) => {
+                let mut status = self.verify_status_or_dom(res).await;
+                if let Status::Online(_) = status {
+                    status = Status::Online(duration);
                 }
+                status
             }
-            None => Status::Offline,
+            Err(e) => Status::Offline(e),
         }
     }
 
-    async fn get_url(&self) -> Option<(reqwest::Response, Duration)> {
+    async fn get_url(&self) -> Result<(reqwest::Response, Duration), ErrorType> {
         let client = Client::new();
         let start_time = std::time::Instant::now();
         let res = client.get(&self.url).timeout(self.timeout).send().await;
         let end_time = std::time::Instant::now();
         let duration = end_time - start_time;
         match res {
-            Ok(res) => Some((res, duration)),
+            Ok(res) => Ok((res, duration)),
             Err(e) => {
-                println!("Error: {}", e);
-                None
+                if e.is_timeout() {
+                    Err(ErrorType::Timeout)
+                } else {
+                    Err(ErrorType::Unknown(e.to_string()))
+                }
             }
         }
     }
@@ -87,7 +99,7 @@ impl ServiceWatcher {
         if res.status().as_u16() == wanted_status_code {
             Status::Online(Duration::from_secs(0))
         } else {
-            Status::Offline
+            Status::Offline(ErrorType::WrongStatus)
         }
     }
 
@@ -96,7 +108,7 @@ impl ServiceWatcher {
         if body.contains(wanted_dom) {
             Status::Online(Duration::from_secs(0))
         } else {
-            Status::Offline
+            Status::Offline(ErrorType::WrongDom)
         }
     }
 }
