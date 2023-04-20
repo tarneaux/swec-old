@@ -32,19 +32,35 @@ impl ServiceWatcherPond {
             let status = watcher_with_status.status.clone();
             join_set.spawn(async move {
                 let new_status = watcher.get_current_status().await;
-                *status.lock().unwrap() = Some(new_status);
+                match status.lock() {
+                    Ok(mut status) => {
+                        *status = Some(new_status);
+                    }
+                    Err(e) => {
+                        println!("Error: {:?}", e);
+                    }
+                }
             });
         }
 
-        while let Some(res) = join_set.join_next().await {
-            println!("res: {:?}", res);
-        }
+        while let Some(_) = join_set.join_next().await {}
     }
 
     pub async fn get_last_statuses(&self) {
         for watcher_with_status in self.watchers.iter() {
-            let status = watcher_with_status.status.lock().unwrap();
-            println!("status: {:?}", status);
+            match watcher_with_status.status.lock() {
+                Ok(status) => match status.as_ref() {
+                    Some(status) => {
+                        println!("status: {:?}", status);
+                    }
+                    None => {
+                        println!("status: None");
+                    }
+                },
+                Err(e) => {
+                    println!("Error: {:?}", e);
+                }
+            }
         }
     }
 }

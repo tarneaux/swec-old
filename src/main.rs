@@ -41,6 +41,5 @@ async fn main() {
     loop {
         pond.run().await;
         pond.get_last_statuses().await;
-        sleep(Duration::from_secs(5)).await;
     }
 }
