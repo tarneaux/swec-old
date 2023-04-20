@@ -10,36 +10,33 @@ async fn main() {
     let mut pond = ServiceWatcherPond::new();
     pond.add_watcher(ServiceWatcher::new(
         "http://github.com/tarneaux/",
-        Duration::from_secs(5),
         OKWhen::InDom("supersplit".to_string()),
     ));
 
     pond.add_watcher(ServiceWatcher::new(
         "http://google.com/",
-        Duration::from_secs(5),
         OKWhen::InDom("google".to_string()),
     ));
 
     pond.add_watcher(ServiceWatcher::new(
         "http://arstarsttthngoogle.com/",
-        Duration::from_secs(5),
         OKWhen::InDom("google".to_string()),
     ));
 
     pond.add_watcher(ServiceWatcher::new(
         "http://arstarsttthngoogle.com/",
-        Duration::from_secs(5),
         OKWhen::InDom("google".to_string()),
     ));
 
     pond.add_watcher(ServiceWatcher::new(
         "http://arstarsttthngoogle.com/",
-        Duration::from_secs(5),
         OKWhen::InDom("google".to_string()),
     ));
+
+    let timeout = Duration::from_secs(5);
 
     loop {
-        pond.run().await;
+        pond.run(timeout).await;
         pond.get_last_statuses().await;
     }
 }

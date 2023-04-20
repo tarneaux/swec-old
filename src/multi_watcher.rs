@@ -1,5 +1,8 @@
 use crate::watcher::{ServiceWatcher, Status};
-use std::sync::{Arc, Mutex};
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 use tokio::task::JoinSet;
 
 pub struct ServiceWatcherPond {
@@ -25,13 +28,13 @@ impl ServiceWatcherPond {
         });
     }
 
-    pub async fn run(&self) {
+    pub async fn run(&self, timeout: Duration) {
         let mut join_set = JoinSet::new();
         for watcher_with_status in self.watchers.iter() {
             let watcher = watcher_with_status.watcher.clone();
             let status = watcher_with_status.status.clone();
             join_set.spawn(async move {
-                let new_status = watcher.get_current_status().await;
+                let new_status = watcher.get_current_status(&timeout).await;
                 match status.lock() {
                     Ok(mut status) => {
                         *status = Some(new_status);

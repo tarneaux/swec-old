@@ -5,7 +5,6 @@ use std::time::Duration;
 #[derive(Clone)]
 pub struct ServiceWatcher {
     url: String,
-    timeout: Duration,
     ok_when: OKWhen,
 }
 
@@ -48,15 +47,14 @@ pub enum OKWhen {
 }
 
 impl ServiceWatcher {
-    pub fn new(url: &str, timeout: Duration, wanted_status: OKWhen) -> Self {
+    pub fn new(url: &str, wanted_status: OKWhen) -> Self {
         ServiceWatcher {
             url: url.to_string(),
-            timeout,
             ok_when: wanted_status,
         }
     }
-    pub async fn get_current_status(&self) -> Status {
-        let res = self.get_url().await;
+    pub async fn get_current_status(&self, timeout: &Duration) -> Status {
+        let res = self.get_url(timeout).await;
         match res {
             Ok((res, duration)) => {
                 let mut status = self.verify_status_or_dom(res).await;
@@ -69,10 +67,13 @@ impl ServiceWatcher {
         }
     }
 
-    async fn get_url(&self) -> Result<(reqwest::Response, Duration), ErrorType> {
+    async fn get_url(
+        &self,
+        timeout: &Duration,
+    ) -> Result<(reqwest::Response, Duration), ErrorType> {
         let client = Client::new();
         let start_time = std::time::Instant::now();
-        let res = client.get(&self.url).timeout(self.timeout).send().await;
+        let res = client.get(&self.url).timeout(*timeout).send().await;
         let end_time = std::time::Instant::now();
         let duration = end_time - start_time;
         match res {
