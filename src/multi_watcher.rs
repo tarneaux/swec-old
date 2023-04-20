@@ -1,8 +1,14 @@
-use crate::watcher::ServiceWatcher;
+use crate::watcher::{ServiceWatcher, Status};
+use std::sync::{Arc, Mutex};
 use tokio::task::JoinSet;
 
 pub struct ServiceWatcherPond {
-    watchers: Vec<ServiceWatcher>,
+    watchers: Vec<ServiceWatcherWithStatus>,
+}
+
+pub struct ServiceWatcherWithStatus {
+    watcher: ServiceWatcher,
+    status: Arc<Mutex<Option<Status>>>,
 }
 
 impl ServiceWatcherPond {
@@ -13,20 +19,32 @@ impl ServiceWatcherPond {
     }
 
     pub fn add_watcher(&mut self, watcher: ServiceWatcher) {
-        self.watchers.push(watcher);
+        self.watchers.push(ServiceWatcherWithStatus {
+            watcher,
+            status: Arc::new(Mutex::new(None)),
+        });
     }
 
     pub async fn run(&self) {
         let mut join_set = JoinSet::new();
-        for watcher in self.watchers.iter() {
-            let watcher = watcher.clone();
+        for watcher_with_status in self.watchers.iter() {
+            let watcher = watcher_with_status.watcher.clone();
+            let status = watcher_with_status.status.clone();
             join_set.spawn(async move {
-                watcher.get_current_status().await;
+                let new_status = watcher.get_current_status().await;
+                *status.lock().unwrap() = Some(new_status);
             });
         }
 
         while let Some(res) = join_set.join_next().await {
             println!("res: {:?}", res);
+        }
+    }
+
+    pub async fn get_last_statuses(&self) {
+        for watcher_with_status in self.watchers.iter() {
+            let status = watcher_with_status.status.lock().unwrap();
+            println!("status: {:?}", status);
         }
     }
 }
