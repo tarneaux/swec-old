@@ -2,6 +2,7 @@ use reqwest::Client;
 use std::fmt::{Debug, Formatter};
 use std::time::Duration;
 
+#[derive(Clone)]
 pub struct ServiceWatcher {
     url: String,
     timeout: Duration,
@@ -40,6 +41,7 @@ impl Debug for ErrorType {
     }
 }
 
+#[derive(Clone)]
 pub enum OKWhen {
     Status(u16),
     InDom(String),
@@ -53,7 +55,7 @@ impl ServiceWatcher {
             ok_when: wanted_status,
         }
     }
-    pub async fn get_current_status(&mut self) -> Status {
+    pub async fn get_current_status(&self) -> Status {
         let res = self.get_url().await;
         match res {
             Ok((res, duration)) => {
