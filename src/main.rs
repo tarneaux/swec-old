@@ -2,7 +2,6 @@ mod multi_watcher;
 mod watcher;
 use multi_watcher::ServiceWatcherPond;
 use std::time::Duration;
-use tokio::time::sleep;
 use watcher::{OKWhen, ServiceWatcher};
 
 #[tokio::main]
