@@ -49,21 +49,23 @@ impl ServiceWatcherPond {
         while let Some(_) = join_set.join_next().await {}
     }
 
-    pub async fn get_last_statuses(&self) {
+    pub async fn get_last_statuses(&self) -> Vec<Option<Status>> {
+        let mut return_value = Vec::new();
         for watcher_with_status in self.watchers.iter() {
-            match watcher_with_status.status.lock() {
+            return_value.push(match watcher_with_status.status.lock() {
                 Ok(status) => match status.as_ref() {
-                    Some(status) => {
-                        println!("status: {:?}", status);
-                    }
-                    None => {
-                        println!("status: None");
-                    }
+                    Some(status) => Some(*status),
+                    None => None,
                 },
                 Err(e) => {
                     println!("Error: {:?}", e);
+                    None
                 }
-            }
+            });
         }
+        return_value
     }
 }
+
+#[derive(Debug)]
+pub struct LockingError;

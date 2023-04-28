@@ -8,6 +8,7 @@ pub struct ServiceWatcher {
     ok_when: OKWhen,
 }
 
+#[derive(Clone)]
 pub enum Status {
     Online(Duration),
     Offline(ErrorType),
@@ -22,12 +23,17 @@ impl Debug for Status {
     }
 }
 
+impl Copy for Status {}
+
+#[derive(Clone)]
 pub enum ErrorType {
     Timeout,
     WrongStatus,
     WrongDom,
-    Unknown(String),
+    Unknown,
 }
+
+impl Copy for ErrorType {}
 
 impl Debug for ErrorType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -35,7 +41,7 @@ impl Debug for ErrorType {
             ErrorType::Timeout => write!(f, "Timeout"),
             ErrorType::WrongStatus => write!(f, "Wrong status code"),
             ErrorType::WrongDom => write!(f, "Wrong dom"),
-            ErrorType::Unknown(e) => write!(f, "Unknown error from reqwest (see https://dtantsur.github.io/rust-openstack/reqwest/struct.Error.html): {}", e),
+            ErrorType::Unknown => write!(f, "Unknown error from reqwest (see https://dtantsur.github.io/rust-openstack/reqwest/struct.Error.html)"),
         }
     }
 }
@@ -82,7 +88,7 @@ impl ServiceWatcher {
                 if e.is_timeout() {
                     Err(ErrorType::Timeout)
                 } else {
-                    Err(ErrorType::Unknown(e.to_string()))
+                    Err(ErrorType::Unknown)
                 }
             }
         }

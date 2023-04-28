@@ -36,6 +36,7 @@ async fn main() {
 
     loop {
         pond.run(timeout).await;
-        pond.get_last_statuses().await;
+        let statuses = pond.get_last_statuses().await;
+        println!("{:?}", statuses);
     }
 }
