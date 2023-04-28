@@ -58,7 +58,7 @@ impl ServiceWatcherPond {
                     None => None,
                 },
                 Err(e) => {
-                    println!("Error: {:?}", e);
+                    println!("Error in get_last_statuses: {:?}", e);
                     None
                 }
             });
