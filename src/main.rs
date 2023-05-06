@@ -7,30 +7,42 @@ use watcher::{OKWhen, ServiceWatcher};
 #[tokio::main]
 async fn main() {
     let mut pond = ServiceWatcherPond::new();
-    pond.add_watcher(ServiceWatcher::new(
-        "http://github.com/tarneaux/",
-        OKWhen::InDom("supersplit".to_string()),
-    ));
+    let _ = pond.add_watcher(
+        "github-tarneaux".to_string(),
+        ServiceWatcher::new(
+            "http://github.com/tarneaux/",
+            OKWhen::InDom("supersplit".to_string()),
+        ),
+    );
 
-    pond.add_watcher(ServiceWatcher::new(
-        "http://google.com/",
-        OKWhen::InDom("google".to_string()),
-    ));
+    let _ = pond.add_watcher(
+        "google-should-succeed".to_string(),
+        ServiceWatcher::new("http://google.com/", OKWhen::InDom("google".to_string())),
+    );
 
-    pond.add_watcher(ServiceWatcher::new(
-        "http://arstarsttthngoogle.com/",
-        OKWhen::InDom("google".to_string()),
-    ));
+    let _ = pond.add_watcher(
+        "google-should-fail".to_string(),
+        ServiceWatcher::new(
+            "http://google.com/",
+            OKWhen::InDom("this will never be in a page".to_string()),
+        ),
+    );
 
-    pond.add_watcher(ServiceWatcher::new(
-        "http://arstarsttthngoogle.com/",
-        OKWhen::InDom("google".to_string()),
-    ));
+    let _ = pond.add_watcher(
+        "github-should-fail".to_string(),
+        ServiceWatcher::new(
+            "http://github.com/noonewilleverusethisname",
+            OKWhen::Status(200),
+        ),
+    );
 
-    pond.add_watcher(ServiceWatcher::new(
-        "http://arstarsttthngoogle.com/",
-        OKWhen::InDom("google".to_string()),
-    ));
+    let _ = pond.add_watcher(
+        "This URL should never be reached".to_string(),
+        ServiceWatcher::new(
+            "http://arstarsttthngoogle.com/",
+            OKWhen::InDom("google".to_string()),
+        ),
+    );
 
     let timeout = Duration::from_secs(5);
 
