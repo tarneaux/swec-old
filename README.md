@@ -1,4 +1,6 @@
-# sweg - services workin', eventually checkin'
+# Swec - Suckless Web Endpoint Checker
+
+(Or "Services Workin', Eventually Checkin")
 
 This is a *very* minimal tool that just checks statuses of web services and outputs them in a machine-readable format.
 
@@ -65,9 +67,11 @@ This is the interval between checks.
 - If specified, the program will count the checking time into the interval. If the timeout is shorter than the interval, the program will run anyway (you have to worry about providing a short enough timeout).
 
 
-## Upcoming features / 
+## Upcoming features
 
 - regex checking for response body
+- Count number of occurences of regex
+- Check when a signal is received (e.g. SIGUSR1)
 
 ## License
 
