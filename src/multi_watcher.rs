@@ -1,17 +1,9 @@
 use crate::watcher::{ServiceWatcher, Status};
-use std::{
-    sync::{Arc, Mutex},
-    time::Duration,
-};
-use tokio::task::JoinSet;
+use std::time::Duration;
+use tokio::task::{JoinError, JoinSet};
 
 pub struct ServiceWatcherPond {
-    watchers: Vec<ServiceWatcherWithStatus>,
-}
-
-pub struct ServiceWatcherWithStatus {
-    watcher: ServiceWatcher,
-    status: Arc<Mutex<Option<Status>>>,
+    watchers: Vec<ServiceWatcher>,
 }
 
 impl ServiceWatcherPond {
@@ -22,48 +14,29 @@ impl ServiceWatcherPond {
     }
 
     pub fn add_watcher(&mut self, watcher: ServiceWatcher) {
-        self.watchers.push(ServiceWatcherWithStatus {
-            watcher,
-            status: Arc::new(Mutex::new(None)),
-        });
+        self.watchers.push(watcher);
     }
 
-    pub async fn run(&self, timeout: Duration) {
+    pub async fn run(&self, timeout: Duration) -> Result<Vec<Status>, JoinError> {
         let mut join_set = JoinSet::new();
-        for watcher_with_status in self.watchers.iter() {
-            let watcher = watcher_with_status.watcher.clone();
-            let status = watcher_with_status.status.clone();
-            join_set.spawn(async move {
-                let new_status = watcher.get_current_status(&timeout).await;
-                match status.lock() {
-                    Ok(mut status) => {
-                        *status = Some(new_status);
-                    }
-                    Err(e) => {
-                        println!("Error: {:?}", e);
-                    }
-                }
-            });
+        for watcher in self.watchers.iter() {
+            let watcher = watcher.clone();
+            join_set.spawn(async move { watcher.get_current_status(&timeout).await });
         }
 
-        while let Some(_) = join_set.join_next().await {}
-    }
-
-    pub async fn get_last_statuses(&self) -> Vec<Option<Status>> {
-        let mut return_value = Vec::new();
-        for watcher_with_status in self.watchers.iter() {
-            return_value.push(match watcher_with_status.status.lock() {
-                Ok(status) => match status.as_ref() {
-                    Some(status) => Some(*status),
-                    None => None,
+        // while let Some(Status) = join_set.join_next().await {}
+        // Get all the statuses and return them
+        let mut statuses = Vec::new();
+        loop {
+            match join_set.join_next().await {
+                Some(status) => match status {
+                    Ok(status) => statuses.push(status),
+                    Err(e) => return Err(e),
                 },
-                Err(e) => {
-                    println!("Error in get_last_statuses: {:?}", e);
-                    None
-                }
-            });
+                None => break,
+            }
         }
-        return_value
+        Ok(statuses)
     }
 }
 

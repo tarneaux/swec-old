@@ -1,13 +1,12 @@
 mod multi_watcher;
-mod status_history;
 mod watcher;
-use status_history::StatusHistoryPond;
+use multi_watcher::ServiceWatcherPond;
 use std::time::Duration;
 use watcher::{OKWhen, ServiceWatcher};
 
 #[tokio::main]
 async fn main() {
-    let mut pond = StatusHistoryPond::new(5);
+    let mut pond = ServiceWatcherPond::new();
     pond.add_watcher(ServiceWatcher::new(
         "http://github.com/tarneaux/",
         OKWhen::InDom("supersplit".to_string()),
@@ -36,8 +35,7 @@ async fn main() {
     let timeout = Duration::from_secs(5);
 
     loop {
-        pond.run(timeout).await;
-        let statuses = pond.get_statuses(0);
+        let statuses = pond.run(timeout).await.unwrap();
         println!("{:?}", statuses);
     }
 }
