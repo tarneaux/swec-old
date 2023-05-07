@@ -1,4 +1,4 @@
-# Swec - Suckless Web Endpoint Checker
+# Swec - Simple Web Endpoint Checker
 
 (Or "Services Workin', Eventually Checkin")
 
@@ -6,7 +6,7 @@ This is a *very* minimal tool that just checks statuses of web services and outp
 
 It can check HTTP(S) endpoints in two ways:
 - by checking the HTTP status code
-- by checking the response body for a string
+- by checking the response DOM for a string
 
 ## Usage
 
@@ -20,17 +20,17 @@ The input format consists of as many lines as there are services to check, with 
 
 The ckeck type can be:
 - `code` - checks the HTTP status code
-- `body` - checks the response body for a string
+- `dom` - checks the response DOM for a string
 
 The check value is the value to check for, depending on the check type:
 - for `code`, this is the expected HTTP status code (e.g. `200`)
-- for `body`, this is the string to look for in the response body.
+- for `dom`, this is the string to look for in the response DOM.
 
 #### Example
 
 ```
 google https://google.com code 200
-github https://github.com body GitHub
+github https://github.com dom GitHub
 ```
 
 ### Output
@@ -69,7 +69,7 @@ This is the interval between checks.
 
 ## Upcoming features
 
-- regex checking for response body
+- regex checking for response DOM
 - Count number of occurences of regex
 - Check when a signal is received (e.g. SIGUSR1)
 

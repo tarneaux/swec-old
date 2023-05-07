@@ -1,4 +1,6 @@
-use crate::watcher::{ServiceWatcher, Status};
+use crate::watcher::{LineParseError, LineParseErrorKind, ServiceWatcher, Status};
+use std::fmt::Debug;
+use std::io::BufRead;
 use std::time::Duration;
 use tokio::task::{JoinError, JoinSet};
 
@@ -11,6 +13,19 @@ impl ServiceWatcherPond {
         Self {
             named_watchers: Vec::new(),
         }
+    }
+
+    pub fn new_from_stdin() -> Result<Self, LineParseError> {
+        let mut pond = Self::new();
+        let stdin = std::io::stdin();
+        for line in stdin.lock().lines() {
+            let line = line.map_err(|e| LineParseError {
+                line: e.to_string(),
+                kind: LineParseErrorKind::IoError,
+            })?;
+            pond.add_watcher_from_line(&line)?;
+        }
+        Ok(pond)
     }
 
     pub fn add_watcher(
@@ -28,6 +43,23 @@ impl ServiceWatcherPond {
             });
             Ok(())
         }
+    }
+
+    pub fn add_watcher_from_line(&mut self, line: &str) -> Result<(), LineParseError> {
+        let mut fields = line.split_whitespace();
+        let name = fields.next().ok_or(LineParseError {
+            line: line.to_string(),
+            kind: LineParseErrorKind::TooFewFields,
+        })?;
+
+        let line_without_name = fields.collect::<Vec<&str>>().join(" ");
+        let watcher = ServiceWatcher::from_line(&line_without_name)?;
+
+        self.add_watcher(name.to_string(), watcher)
+            .map_err(|_| LineParseError {
+                line: line.to_string(),
+                kind: LineParseErrorKind::TooManyFields,
+            })
     }
 
     pub async fn run(&self, timeout: Duration) -> Result<Vec<NamedWatcherStatus>, PondWorkerError> {
