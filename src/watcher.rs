@@ -28,8 +28,7 @@ impl Copy for Status {}
 #[derive(Clone)]
 pub enum ErrorType {
     Timeout,
-    WrongStatus,
-    WrongDom,
+    WrongResponse,
     Unknown,
 }
 
@@ -39,8 +38,7 @@ impl Debug for ErrorType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ErrorType::Timeout => write!(f, "Timeout"),
-            ErrorType::WrongStatus => write!(f, "Wrong status code"),
-            ErrorType::WrongDom => write!(f, "Wrong dom"),
+            ErrorType::WrongResponse => write!(f, "Wrong response: didn't match OKWhen"),
             ErrorType::Unknown => write!(f, "Unknown error from reqwest (see https://dtantsur.github.io/rust-openstack/reqwest/struct.Error.html)"),
         }
     }
@@ -165,7 +163,7 @@ impl ServiceWatcher {
         if res.status().as_u16() == wanted_status_code {
             Status::Online(Duration::from_secs(0))
         } else {
-            Status::Offline(ErrorType::WrongStatus)
+            Status::Offline(ErrorType::WrongResponse)
         }
     }
 
@@ -174,7 +172,7 @@ impl ServiceWatcher {
         if body.contains(wanted_dom) {
             Status::Online(Duration::from_secs(0))
         } else {
-            Status::Offline(ErrorType::WrongDom)
+            Status::Offline(ErrorType::WrongResponse)
         }
     }
 }

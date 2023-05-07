@@ -44,6 +44,7 @@ The status can be:
 - `ok` - the check was successful
 - `fail` - the check failed
 - `timeout` - the check timed out
+- `unknown` - the check failed due to an unknown error and could not be completed
 
 The response time is the time it took to get a response from the service, in milliseconds.
 

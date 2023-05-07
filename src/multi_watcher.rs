@@ -106,8 +106,8 @@ struct NamedWatcher {
 
 #[derive(Debug, Clone)]
 pub struct NamedWatcherStatus {
-    name: String,
-    status: Status,
+    pub name: String,
+    pub status: Status,
 }
 
 #[derive(Debug)]
