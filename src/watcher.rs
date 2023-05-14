@@ -50,67 +50,11 @@ pub enum OKWhen {
     InDom(String),
 }
 
-#[derive(Debug)]
-pub struct LineParseError {
-    pub line: String,
-    pub kind: LineParseErrorKind,
-}
-
-#[derive(Debug)]
-pub enum LineParseErrorKind {
-    TooFewFields,
-    TooManyFields,
-    InvalidCheckType,
-    InvalidCheckValue,
-    IoError,
-}
-
 impl ServiceWatcher {
     pub fn new(url: &str, wanted_status: OKWhen) -> Self {
         ServiceWatcher {
             url: url.to_string(),
             ok_when: wanted_status,
-        }
-    }
-
-    pub fn from_line(line: &str) -> Result<Self, LineParseError> {
-        let mut fields = line.split_whitespace();
-
-        let url = fields.next().ok_or(LineParseError {
-            line: line.to_string(),
-            kind: LineParseErrorKind::TooFewFields,
-        })?;
-
-        let check_type = fields.next().ok_or(LineParseError {
-            line: line.to_string(),
-            kind: LineParseErrorKind::TooFewFields,
-        })?;
-
-        let check_value = fields.next().ok_or(LineParseError {
-            line: line.to_string(),
-            kind: LineParseErrorKind::TooFewFields,
-        })?;
-
-        if fields.next().is_some() {
-            return Err(LineParseError {
-                line: line.to_string(),
-                kind: LineParseErrorKind::TooManyFields,
-            });
-        }
-
-        match check_type {
-            "code" => {
-                let code = check_value.parse::<u16>().map_err(|_| LineParseError {
-                    line: line.to_string(),
-                    kind: LineParseErrorKind::InvalidCheckValue,
-                })?;
-                Ok(Self::new(url, OKWhen::Status(code)))
-            }
-            "dom" => Ok(Self::new(url, OKWhen::InDom(check_value.to_string()))),
-            &_ => Err(LineParseError {
-                line: line.to_string(),
-                kind: LineParseErrorKind::InvalidCheckType,
-            }),
         }
     }
 
