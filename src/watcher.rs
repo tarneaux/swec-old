@@ -1,4 +1,5 @@
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Formatter};
 use std::time::Duration;
 
@@ -8,7 +9,7 @@ pub struct ServiceWatcher {
     ok_when: OKWhen,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum Status {
     Online(Duration),
     Offline(ErrorType),
@@ -25,7 +26,7 @@ impl Debug for Status {
 
 impl Copy for Status {}
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum ErrorType {
     Timeout,
     WrongResponse,
