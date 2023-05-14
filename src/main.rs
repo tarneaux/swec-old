@@ -2,7 +2,6 @@ mod multi_watcher;
 mod watcher;
 use multi_watcher::ServiceWatcherPond;
 use parking_lot::RwLock;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
