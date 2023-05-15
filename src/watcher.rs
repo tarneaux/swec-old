@@ -24,21 +24,20 @@ impl Debug for Status {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Copy)]
 pub enum ErrorType {
     Timeout,
     WrongResponse,
     Unknown,
 }
 
-impl Copy for ErrorType {}
-
 impl Debug for ErrorType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ErrorType::Timeout => write!(f, "Timeout"),
             ErrorType::WrongResponse => write!(f, "Wrong response: didn't match OKWhen"),
-            ErrorType::Unknown => write!(f, "Unknown error from reqwest (see https://dtantsur.github.io/rust-openstack/reqwest/struct.Error.html)"),
+            // Other errors from reqwest, see https://dtantsur.github.io/rust-openstack/reqwest/struct.Error.html
+            ErrorType::Unknown => write!(f, "Unknown error"),
         }
     }
 }

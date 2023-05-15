@@ -37,7 +37,7 @@ impl ServiceWatcherPond {
         if statuses.iter().any(|s| s.is_none()) {
             return Err(PondWorkerError::DidNotFinish);
         }
-        Ok(statuses.into_iter().map(|s| s.unwrap()).collect()) // Unwrap is safe (see above)
+        Ok(statuses.into_iter().map(|s| s.unwrap()).collect()) // Unwrap is safe here (see above)
     }
 }
 
