@@ -9,7 +9,7 @@ pub struct ServiceWatcher {
     ok_when: OKWhen,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Copy)]
 pub enum Status {
     Online(Duration),
     Offline(ErrorType),
@@ -23,8 +23,6 @@ impl Debug for Status {
         }
     }
 }
-
-impl Copy for Status {}
 
 #[derive(Clone, Serialize, Deserialize)]
 pub enum ErrorType {

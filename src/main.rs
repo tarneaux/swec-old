@@ -2,29 +2,27 @@ mod multi_watcher;
 mod watcher;
 use multi_watcher::ServiceWatcherPond;
 use parking_lot::RwLock;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
 use warp::Filter;
-use watcher::{OKWhen, ServiceWatcher, Status};
+use watcher::{ErrorType, OKWhen, ServiceWatcher, Status};
 
 #[tokio::main]
 async fn main() {
     let mut pond = ServiceWatcherPond::new();
-    pond.add_watcher(
-        "alright".to_string(),
-        ServiceWatcher::new("https://google.com", OKWhen::Status(200)),
-    )
-    .unwrap();
-    pond.add_watcher(
-        "alwrong".to_string(),
-        ServiceWatcher::new("https://matrixa.renn.es", OKWhen::Status(200)),
-    )
-    .unwrap();
+    pond.watchers.push(ServiceWatcher::new(
+        "https://www.google.com",
+        OKWhen::Status(200),
+    ));
 
-    let statushistories: Arc<RwLock<HashMap<String, Vec<Status>>>> =
-        Arc::new(RwLock::new(HashMap::new()));
+    pond.watchers.push(ServiceWatcher::new(
+        "https://www.grstoogle.com",
+        OKWhen::Status(200),
+    ));
+
+    let statushistories: Arc<RwLock<Vec<Vec<Status>>>> =
+        Arc::new(RwLock::new(Vec::with_capacity(pond.watchers.len())));
 
     let max_history = 2;
 
@@ -34,13 +32,17 @@ async fn main() {
         statushistories.clone(),
         max_history,
     ));
-    let service_handler = warp::path!("service" / String).map(move |name| {
+    let service_handler = warp::path!("service" / usize).map(move |id| {
         let histories = statushistories.read();
-        match histories.get(&name) {
+        match histories.get(id) {
             Some(history) => warp::reply::json(&history),
-            None => warp::reply::json(&Vec::<Status>::new()),
+            None => warp::reply::json(&Vec::<Status>::new()), // TODO: return error code to make a
+                                                              // real REST API
         }
     });
+    // TODO: also allow
+    // getting service by
+    // name
     warp::serve(service_handler)
         .run(([127, 0, 0, 1], 3030))
         .await;
@@ -49,7 +51,7 @@ async fn main() {
 
 async fn background_watcher(
     pond: ServiceWatcherPond,
-    statushistories: Arc<RwLock<HashMap<String, Vec<Status>>>>,
+    statushistories: Arc<RwLock<Vec<Vec<Status>>>>,
     max_history: usize,
 ) {
     let timeout = Duration::from_secs(5);
@@ -63,13 +65,14 @@ async fn background_watcher(
             let result = result.unwrap();
             {
                 let mut histories = statushistories.write();
-                for status in result {
-                    histories
-                        .entry(status.name.clone())
-                        .or_insert(Vec::new())
-                        .push(status.status);
-                    if histories[&status.name].len() > max_history {
-                        histories.get_mut(&status.name).unwrap().remove(0); // Unwrap is safe because we just inserted it
+                for (id, status) in result.iter().enumerate() {
+                    if histories.len() <= id {
+                        histories.push(Vec::new());
+                    }
+                    let history = &mut histories[id];
+                    history.push(status.clone());
+                    if history.len() > max_history {
+                        history.remove(0);
                     }
                 }
             }
