@@ -14,11 +14,13 @@ async fn main() {
     pond.watchers.push(ServiceWatcher::new(
         "https://www.google.com",
         OKWhen::Status(200),
+        "google",
     ));
 
     pond.watchers.push(ServiceWatcher::new(
         "https://www.grstoogle.com",
         OKWhen::Status(200),
+        "grstoogle",
     ));
 
     let statushistories: Arc<RwLock<Vec<Vec<Status>>>> =
@@ -28,21 +30,48 @@ async fn main() {
 
     // Start background service watcher
     let watcher_handle = tokio::spawn(background_watcher(
-        pond,
+        pond.clone(),
         statushistories.clone(),
         max_history,
     ));
-    let service_handler = warp::path!("service" / usize).map(move |id| {
-        let histories = statushistories.read();
-        match histories.get(id) {
-            Some(history) => warp::reply::json(&history),
-            None => warp::reply::json(&Vec::<Status>::new()), // TODO: return error code to make a
-                                                              // real REST API
-        }
-    });
-    // TODO: also allow
-    // getting service by
-    // name
+
+    let service_handler = {
+        let statushistories = statushistories.clone();
+        let service_status_handler = warp::path!("service" / usize / "status").map(move |id| {
+            let histories = statushistories.read();
+            match histories.get(id) {
+                Some(history) => warp::reply::json(&history),
+                None => warp::reply::json(&Vec::<Status>::new()), // TODO: return error code if
+                                                                  // id is out of bounds
+            }
+        });
+        let watchers = pond.watchers.clone();
+        let service_info_handler = warp::path!("service" / usize / "name").map(move |id| {
+            match watchers.get(id) {
+                Some::<&ServiceWatcher>(watcher) => {
+                    let name: String = watcher.name.clone();
+                    name
+                }
+                None => "".to_string(), // TODO: return error code if
+                                        // id is out of bounds
+            }
+        });
+        // Get names of all services
+        let service_list_handler = {
+            let watchers = pond.watchers.clone();
+            warp::path!("service" / "list").map(move || {
+                let mut result = Vec::new();
+                for watcher in watchers.iter() {
+                    result.push(&watcher.name);
+                }
+                warp::reply::json(&result)
+            })
+        };
+        service_status_handler
+            .or(service_info_handler)
+            .or(service_list_handler)
+    };
+
     warp::serve(service_handler)
         .run(([127, 0, 0, 1], 3030))
         .await;

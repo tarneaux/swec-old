@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use std::time::Duration;
 use tokio::task::{JoinError, JoinSet};
 
+#[derive(Clone)]
 pub struct ServiceWatcherPond {
     pub watchers: Vec<ServiceWatcher>,
 }
