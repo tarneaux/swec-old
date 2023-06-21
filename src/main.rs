@@ -5,7 +5,7 @@ use parking_lot::RwLock;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
-use warp::Filter;
+use warp::{reply, Filter};
 use watcher::{ErrorType, OKWhen, ServiceWatcher, Status};
 
 #[tokio::main]
@@ -26,13 +26,14 @@ async fn main() {
     let statushistories: Arc<RwLock<Vec<Vec<Status>>>> =
         Arc::new(RwLock::new(Vec::with_capacity(pond.watchers.len())));
 
-    let max_history = 2;
+    let max_history = 86400;
 
     // Start background service watcher
     let watcher_handle = tokio::spawn(background_watcher(
         pond.clone(),
         statushistories.clone(),
         max_history,
+        Duration::from_secs(30),
     ));
 
     let service_handler = {
@@ -41,21 +42,18 @@ async fn main() {
             let histories = statushistories.read();
             match histories.get(id) {
                 Some(history) => warp::reply::json(&history),
-                None => warp::reply::json(&Vec::<Status>::new()), // TODO: return error code if
-                                                                  // id is out of bounds
+                None => warp::reply::json(&Vec::<Status>::new()),
             }
         });
         let watchers = pond.watchers.clone();
-        let service_info_handler = warp::path!("service" / usize / "name").map(move |id| {
-            match watchers.get(id) {
+        let service_info_handler =
+            warp::path!("service" / usize / "name").map(move |id| match watchers.get(id) {
                 Some::<&ServiceWatcher>(watcher) => {
                     let name: String = watcher.name.clone();
                     name
                 }
-                None => "".to_string(), // TODO: return error code if
-                                        // id is out of bounds
-            }
-        });
+                None => "".to_string(),
+            });
         // Get names of all services
         let service_list_handler = {
             let watchers = pond.watchers.clone();
@@ -82,10 +80,10 @@ async fn background_watcher(
     pond: ServiceWatcherPond,
     statushistories: Arc<RwLock<Vec<Vec<Status>>>>,
     max_history: usize,
+    interval: Duration,
 ) {
-    let timeout = Duration::from_secs(5);
     loop {
-        let result = pond.run(timeout).await;
+        let result = pond.run(interval).await;
 
         if let Err(e) = result {
             println!("Error: {:?}", e);
