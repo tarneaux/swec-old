@@ -5,8 +5,8 @@ use parking_lot::RwLock;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
-use warp::{reply, Filter};
-use watcher::{ErrorType, OKWhen, ServiceWatcher, Status};
+use warp::Filter;
+use watcher::{OKWhen, ServiceWatcher, Status};
 
 #[tokio::main]
 async fn main() {
@@ -33,7 +33,7 @@ async fn main() {
         pond.clone(),
         statushistories.clone(),
         max_history,
-        Duration::from_secs(30),
+        Duration::from_secs(1),
     ));
 
     let service_handler = {
@@ -83,6 +83,7 @@ async fn background_watcher(
     interval: Duration,
 ) {
     loop {
+        let start_time = tokio::time::Instant::now();
         let result = pond.run(interval).await;
 
         if let Err(e) = result {
@@ -103,7 +104,10 @@ async fn background_watcher(
                     }
                 }
             }
-            sleep(Duration::from_secs(1)).await;
+        }
+        let elapsed = start_time.elapsed();
+        if elapsed < interval {
+            sleep(interval - elapsed).await;
         }
     }
 }
