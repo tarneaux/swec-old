@@ -47,7 +47,7 @@ async fn main() {
         // Get the status of all services
         let all_services_status_handler = {
             let status_histories = status_histories.clone();
-            warp::path!("service" / "statuses").map(move || {
+            warp::path!("service" / "status").map(move || {
                 let histories = status_histories.read().clone();
                 warp::reply::json(&histories)
             })
@@ -77,7 +77,7 @@ async fn main() {
         // Get the information of all services
         let all_services_info_handler = {
             let watchers = pond.watchers.clone();
-            warp::path!("service" / "infos").map(move || warp::reply::json(&watchers))
+            warp::path!("service" / "info").map(move || warp::reply::json(&watchers))
         };
 
         service_status_handler
