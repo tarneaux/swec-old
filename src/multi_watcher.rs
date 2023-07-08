@@ -1,3 +1,9 @@
+/*
+ * Swec: Simple Web Endpoint Checker
+ * Author: tarneo <tarneo@tarneo.fr>
+ * License: GPLv2
+ */
+
 use crate::watcher::{ServiceWatcher, Status};
 use core::fmt::{Display, Formatter};
 use parking_lot::RwLock;

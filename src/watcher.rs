@@ -1,3 +1,9 @@
+/*
+ * Swec: Simple Web Endpoint Checker
+ * Author: tarneo <tarneo@tarneo.fr>
+ * License: GPLv2
+ */
+
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Formatter};
