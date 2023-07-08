@@ -1,13 +1,21 @@
+use clap::Parser;
 use warp::Filter;
 
+mod argument_parser;
 mod multi_watcher;
 mod watcher;
 
+use argument_parser::Args;
 use multi_watcher::ServiceWatcherPond;
 
 #[tokio::main]
 async fn main() {
-    let mut pond = ServiceWatcherPond::new_from_config("config.yaml").unwrap();
+    let args = Args::parse();
+
+    let mut pond = ServiceWatcherPond::new_from_config(&args.config).unwrap_or_else(|err| {
+        eprintln!("{}", err);
+        std::process::exit(1);
+    });
 
     let statushistories = pond.statushistories.clone();
 

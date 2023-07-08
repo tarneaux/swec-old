@@ -1,7 +1,7 @@
 use crate::watcher::{ServiceWatcher, Status};
+use core::fmt::{Display, Formatter};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
@@ -120,4 +120,13 @@ impl Config {
 pub enum ConfigReadingError {
     FileError(std::io::Error),
     YamlError(serde_yaml::Error),
+}
+
+impl Display for ConfigReadingError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConfigReadingError::FileError(e) => write!(f, "Error while reading config file: {}", e),
+            ConfigReadingError::YamlError(e) => write!(f, "Error while parsing config file: {}", e),
+        }
+    }
 }

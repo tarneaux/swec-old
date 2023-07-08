@@ -8,6 +8,7 @@ description = "Simple Web Endpoint Checker"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+clap = { version = "4.3.11", features = ["derive"] }
 parking_lot = "0.12.1"
 reqwest = "0.11.4"
 serde = { version = "1.0.163", features = ["derive"] }
