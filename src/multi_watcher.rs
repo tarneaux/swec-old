@@ -20,8 +20,7 @@ impl ServiceWatcherPond {
         // We immediately allocate the maximum amount of memory that we will need for the history
         // of each watcher. This way:
         //   - There is no need to reallocate memory in each iteration
-        //   - The user will have no surprises: the memory usage (at least for the history) will be
-        //   constant
+        //   - The user will have no surprises: the memory usage will be constant for the history
         // +1: because we will be rolling the history (meaning we will add a new element and remove
         // the oldest one in each iteration)
         status_histories.resize(watchers.len(), Vec::with_capacity(histsize + 1));
