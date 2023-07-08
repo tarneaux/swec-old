@@ -85,10 +85,32 @@ async fn main() {
             warp::path!("service" / "names").map(move || warp::reply::json(&watcher_names))
         };
 
+        // Get the URL of a service
+        let service_url_handler = {
+            let watcher_urls: Vec<_> = pond.watchers.iter().map(|w| w.url.clone()).collect();
+            warp::path!("service" / usize / "url").map(move |id| match watcher_urls.get(id) {
+                Some(url) => {
+                    warp::reply::with_status(warp::reply::json(&url), warp::http::StatusCode::OK)
+                }
+                None => warp::reply::with_status(
+                    warp::reply::json(&String::new()),
+                    warp::http::StatusCode::NOT_FOUND,
+                ),
+            })
+        };
+
+        // Get the URLs of all services
+        let all_services_url_handler = {
+            let watcher_urls: Vec<_> = pond.watchers.iter().map(|w| w.url.clone()).collect();
+            warp::path!("service" / "urls").map(move || warp::reply::json(&watcher_urls))
+        };
+
         service_status_handler
             .or(all_services_status_handler)
             .or(service_name_handler)
             .or(all_services_name_handler)
+            .or(service_url_handler)
+            .or(all_services_url_handler)
     };
 
     warp::serve(service_handler)
