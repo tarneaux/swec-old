@@ -64,7 +64,7 @@ async fn main() {
         // Get the names of all services
         let all_services_name_handler = {
             let watchers = pond.watchers.clone();
-            warp::path!("service" / "list").map(move || {
+            warp::path!("service" / "names").map(move || {
                 let mut result = Vec::new();
                 for watcher in watchers.iter() {
                     result.push(&watcher.name);
