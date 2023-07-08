@@ -50,7 +50,7 @@ async fn main() {
         };
 
         // Get the name of a service
-        let service_info_handler = {
+        let service_name_handler = {
             let watchers = pond.watchers.clone();
             warp::path!("service" / usize / "name").map(move |id| match watchers.get(id) {
                 Some::<&ServiceWatcher>(watcher) => {
@@ -62,7 +62,7 @@ async fn main() {
         };
 
         // Get the names of all services
-        let service_list_handler = {
+        let all_services_name_handler = {
             let watchers = pond.watchers.clone();
             warp::path!("service" / "list").map(move || {
                 let mut result = Vec::new();
@@ -74,8 +74,8 @@ async fn main() {
         };
 
         service_status_handler
-            .or(service_info_handler)
-            .or(service_list_handler)
+            .or(service_name_handler)
+            .or(all_services_name_handler)
     };
 
     warp::serve(service_handler)
