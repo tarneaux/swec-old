@@ -9,14 +9,14 @@ use tokio::task::{JoinError, JoinSet};
 
 pub struct ServiceWatcherPond {
     pub watchers: Vec<ServiceWatcher>,
-    pub statushistories: Arc<RwLock<Vec<Vec<Status>>>>,
+    pub status_histories: Arc<RwLock<Vec<Vec<Status>>>>,
     pub histsize: usize,
     pub interval: Duration,
 }
 
 impl ServiceWatcherPond {
     fn new(watchers: Vec<ServiceWatcher>, histsize: usize, interval: Duration) -> Self {
-        let mut statushistories = Vec::with_capacity(watchers.len());
+        let mut status_histories = Vec::with_capacity(watchers.len());
         // We immediately allocate the maximum amount of memory that we will need for the history
         // of each watcher. This way:
         //   - There is no need to reallocate memory in each iteration
@@ -24,12 +24,12 @@ impl ServiceWatcherPond {
         //   constant
         // +1: because we will be rolling the history (meaning we will add a new element and remove
         // the oldest one in each iteration)
-        statushistories.resize(watchers.len(), Vec::with_capacity(histsize + 1));
+        status_histories.resize(watchers.len(), Vec::with_capacity(histsize + 1));
 
-        let statushistories = Arc::new(RwLock::new(statushistories));
+        let status_histories = Arc::new(RwLock::new(status_histories));
         Self {
             watchers,
-            statushistories,
+            status_histories,
             histsize,
             interval,
         }
@@ -54,8 +54,8 @@ impl ServiceWatcherPond {
                 None => break,
             }?;
             {
-                let statushistories = &mut self.statushistories.write();
-                let history = &mut statushistories[id];
+                let status_histories = &mut self.status_histories.write();
+                let history = &mut status_histories[id];
                 if history.len() == self.histsize {
                     history.remove(0);
                 }
@@ -94,7 +94,7 @@ impl Clone for ServiceWatcherPond {
     fn clone(&self) -> Self {
         Self {
             watchers: self.watchers.clone(),
-            statushistories: self.statushistories.clone(),
+            status_histories: self.status_histories.clone(),
             histsize: self.histsize,
             interval: self.interval,
         }

@@ -17,16 +17,16 @@ async fn main() {
         std::process::exit(1);
     });
 
-    let statushistories = pond.statushistories.clone();
+    let status_histories = pond.status_histories.clone();
 
     let watcher_handle = pond.start_watcher();
 
     let service_handler = {
         // Get the status of a service
         let service_status_handler = {
-            let statushistories = statushistories.clone();
+            let status_histories = status_histories.clone();
             warp::path!("service" / usize / "status").map(move |id| {
-                let history = statushistories.read().get(id).cloned();
+                let history = status_histories.read().get(id).cloned();
                 history.map_or_else(
                     || {
                         warp::reply::with_status(
@@ -46,9 +46,9 @@ async fn main() {
 
         // Get the status of all services
         let all_services_status_handler = {
-            let statushistories = statushistories.clone();
+            let status_histories = status_histories.clone();
             warp::path!("service" / "statuses").map(move || {
-                let histories = statushistories.read().clone();
+                let histories = status_histories.read().clone();
                 warp::reply::json(&histories)
             })
         };
