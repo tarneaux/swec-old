@@ -42,7 +42,11 @@ impl ServiceWatcherPond {
 
     pub fn new_from_config(path: &str) -> Result<Self, ConfigReadingError> {
         let config = Config::read(path)?;
-        Ok(Self::new(config.watchers, config.histsize, config.interval))
+        Ok(Self::new(
+            config.watchers,
+            config.histsize,
+            Duration::from_secs(config.interval),
+        ))
     }
 
     async fn run_once(&mut self, timeout: Duration) -> Result<(), JoinError> {
@@ -109,7 +113,7 @@ impl Clone for ServiceWatcherPond {
 #[derive(Serialize, Deserialize)]
 struct Config {
     pub watchers: Vec<ServiceWatcher>,
-    pub interval: Duration,
+    pub interval: u64,
     pub histsize: usize,
 }
 
