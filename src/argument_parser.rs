@@ -5,9 +5,8 @@
  */
 
 use clap::Parser;
-use std::fmt::Debug;
 
-#[derive(Parser, Debug)]
+#[derive(Parser)]
 #[command(author, version, about, long_about=None)]
 pub struct Args {
     #[clap(short, long, default_value = "/etc/swec/config.yml")]

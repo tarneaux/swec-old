@@ -6,10 +6,9 @@
 
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use std::fmt::{Debug, Formatter};
 use std::time::Duration;
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ServiceWatcher {
     pub url: String,
     pub ok_when: OkWhen,
@@ -83,40 +82,20 @@ impl ServiceWatcher {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, Copy)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum Status {
     Online(Duration),
     Offline(ErrorType),
 }
 
-impl Debug for Status {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Online(d) => write!(f, "Online({:?})", d),
-            Self::Offline(e) => write!(f, "Offline: {:?}", e),
-        }
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize, Copy)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum ErrorType {
     Timeout,
     WrongResponse,
     Unknown,
 }
 
-impl Debug for ErrorType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Timeout => write!(f, "Timeout"),
-            Self::WrongResponse => write!(f, "Wrong response: didn't match OKWhen"),
-            // Other errors from reqwest, see https://dtantsur.github.io/rust-openstack/reqwest/struct.Error.html
-            Self::Unknown => write!(f, "Unknown error"),
-        }
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum OkWhen {
     Status(u16),
     InDom(String),

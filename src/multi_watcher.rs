@@ -8,7 +8,6 @@ use crate::watcher::{ServiceWatcher, Status};
 use core::fmt::{Display, Formatter};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::task::{JoinError, JoinSet};
@@ -125,7 +124,6 @@ impl Config {
     }
 }
 
-#[derive(Debug)]
 pub enum ConfigReadingError {
     FileError(std::io::Error),
     YamlError(serde_yaml::Error),
