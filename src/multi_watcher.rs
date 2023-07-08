@@ -82,7 +82,9 @@ impl ServiceWatcherPond {
 
                 // Wait for the interval to pass so that we don't
                 // change the frequency of checks
-                timeout_handle.await.unwrap();
+                timeout_handle.await.unwrap_or_else(|e| {
+                    eprintln!("Error while waiting for timeout: {:?}", e);
+                });
             }
         })
     }
@@ -125,8 +127,8 @@ pub enum ConfigReadingError {
 impl Display for ConfigReadingError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            ConfigReadingError::FileError(e) => write!(f, "Error while reading config file: {}", e),
-            ConfigReadingError::YamlError(e) => write!(f, "Error while parsing config file: {}", e),
+            Self::FileError(e) => write!(f, "Error while reading config file: {}", e),
+            Self::YamlError(e) => write!(f, "Error while parsing config file: {}", e),
         }
     }
 }

@@ -65,7 +65,10 @@ impl ServiceWatcher {
     }
 
     async fn verify_dom(&self, res: reqwest::Response, wanted_dom: &str) -> Status {
-        let body = res.text().await.unwrap();
+        let body = res.text().await.unwrap_or_else(|e| {
+            eprintln!("Error while reading body of response: {}", e);
+            "".to_string()
+        });
         if body.contains(wanted_dom) {
             Status::Online(Duration::from_secs(0))
         } else {
