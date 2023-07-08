@@ -43,8 +43,14 @@ async fn main() {
             warp::path!("service" / usize / "status").map(move |id| {
                 let histories = statushistories.read();
                 match histories.get(id) {
-                    Some(history) => warp::reply::json(&history),
-                    None => warp::reply::json(&Vec::<Status>::new()),
+                    Some(history) => warp::reply::with_status(
+                        warp::reply::json(&history),
+                        warp::http::StatusCode::OK,
+                    ),
+                    None => warp::reply::with_status(
+                        warp::reply::json(&Vec::<Status>::new()),
+                        warp::http::StatusCode::NOT_FOUND,
+                    ),
                 }
             })
         };
@@ -63,8 +69,13 @@ async fn main() {
         let service_name_handler = {
             let watcher_names: Vec<_> = pond.watchers.iter().map(|w| w.name.clone()).collect();
             warp::path!("service" / usize / "name").map(move |id| match watcher_names.get(id) {
-                Some(name) => warp::reply::json(&name),
-                None => warp::reply::json(&String::new()),
+                Some(name) => {
+                    warp::reply::with_status(warp::reply::json(&name), warp::http::StatusCode::OK)
+                }
+                None => warp::reply::with_status(
+                    warp::reply::json(&String::new()),
+                    warp::http::StatusCode::NOT_FOUND,
+                ),
             })
         };
 
