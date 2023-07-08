@@ -101,8 +101,6 @@ impl Clone for ServiceWatcherPond {
     }
 }
 
-trait Name {}
-
 #[derive(Serialize, Deserialize)]
 struct Config {
     pub watchers: Vec<ServiceWatcher>,
