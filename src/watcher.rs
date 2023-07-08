@@ -6,7 +6,7 @@ use std::time::Duration;
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ServiceWatcher {
     pub url: String,
-    pub ok_when: OKWhen,
+    pub ok_when: OkWhen,
     pub name: String,
 }
 
@@ -48,8 +48,8 @@ impl ServiceWatcher {
 
     async fn verify_status_or_dom(&self, res: reqwest::Response) -> Status {
         match &self.ok_when {
-            OKWhen::Status(status) => self.verify_status_code(res, *status).await,
-            OKWhen::InDom(dom) => {
+            OkWhen::Status(status) => self.verify_status_code(res, *status).await,
+            OkWhen::InDom(dom) => {
                 let dom = dom.to_string();
                 self.verify_dom(res, &dom).await
             }
@@ -111,7 +111,7 @@ impl Debug for ErrorType {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub enum OKWhen {
+pub enum OkWhen {
     Status(u16),
     InDom(String),
 }
