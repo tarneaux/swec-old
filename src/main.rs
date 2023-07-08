@@ -1,40 +1,18 @@
+use warp::Filter;
+
 mod multi_watcher;
 mod watcher;
+
 use multi_watcher::ServiceWatcherPond;
-use parking_lot::RwLock;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::time::sleep;
-use warp::Filter;
-use watcher::{OKWhen, ServiceWatcher, Status};
+use watcher::Status;
 
 #[tokio::main]
 async fn main() {
-    let mut pond = ServiceWatcherPond::new();
-    pond.watchers.push(ServiceWatcher::new(
-        "https://www.google.com",
-        OKWhen::Status(200),
-        "google",
-    ));
+    let mut pond = ServiceWatcherPond::new_from_config("config.yaml").unwrap();
 
-    pond.watchers.push(ServiceWatcher::new(
-        "https://www.grstoogle.com",
-        OKWhen::Status(200),
-        "grstoogle",
-    ));
+    let statushistories = pond.statushistories.clone();
 
-    let statushistories: Arc<RwLock<Vec<Vec<Status>>>> =
-        Arc::new(RwLock::new(Vec::with_capacity(pond.watchers.len())));
-
-    let max_history = 86400;
-
-    // Start background service watcher
-    let watcher_handle = tokio::spawn(background_watcher(
-        pond.clone(),
-        statushistories.clone(),
-        max_history,
-        Duration::from_secs(1),
-    ));
+    let watcher_handle = pond.start_watcher();
 
     let service_handler = {
         // Get the status of a service
@@ -60,7 +38,8 @@ async fn main() {
             let statushistories = statushistories.clone();
             warp::path!("service" / "statuses").map(move || {
                 let histories = statushistories.read();
-                let histories: Vec<_> = histories.iter().map(|h| h.clone()).collect();
+                // RwLockReadGuard<Vec<_>> -> Vec<_> to be able to serialize
+                let histories: Vec<_> = histories.iter().cloned().collect();
                 warp::reply::json(&histories)
             })
         };
@@ -83,10 +62,7 @@ async fn main() {
         // Get the information of all services
         let all_services_info_handler = {
             let watchers = pond.watchers.clone();
-            warp::path!("service" / "infos").map(move || {
-                let watchers: Vec<_> = watchers.iter().map(|w| w.clone()).collect();
-                warp::reply::json(&watchers)
-            })
+            warp::path!("service" / "infos").map(move || warp::reply::json(&watchers))
         };
 
         service_status_handler
@@ -99,40 +75,4 @@ async fn main() {
         .run(([127, 0, 0, 1], 3030))
         .await;
     watcher_handle.abort();
-}
-
-async fn background_watcher(
-    pond: ServiceWatcherPond,
-    statushistories: Arc<RwLock<Vec<Vec<Status>>>>,
-    max_history: usize,
-    interval: Duration,
-) {
-    loop {
-        let start_time = tokio::time::Instant::now();
-        let result = pond.run(interval).await;
-
-        if let Err(e) = result {
-            println!("Error: {:?}", e);
-            continue;
-        } else {
-            let result = result.unwrap();
-            {
-                let mut histories = statushistories.write();
-                for (id, status) in result.iter().enumerate() {
-                    if histories.len() <= id {
-                        histories.push(Vec::new());
-                    }
-                    let history = &mut histories[id];
-                    history.push(status.clone());
-                    if history.len() > max_history {
-                        history.remove(0);
-                    }
-                }
-            }
-        }
-        let elapsed = start_time.elapsed();
-        if elapsed < interval {
-            sleep(interval - elapsed).await;
-        }
-    }
 }

@@ -11,14 +11,6 @@ pub struct ServiceWatcher {
 }
 
 impl ServiceWatcher {
-    pub fn new(url: &str, wanted_status: OKWhen, name: &str) -> Self {
-        ServiceWatcher {
-            url: url.to_string(),
-            ok_when: wanted_status,
-            name: name.to_string(),
-        }
-    }
-
     pub async fn get_current_status(&self, timeout: &Duration) -> Status {
         let res = self.get_url(timeout).await;
         match res {
@@ -91,8 +83,8 @@ pub enum Status {
 impl Debug for Status {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Status::Online(d) => write!(f, "Online({:?})", d),
-            Status::Offline(e) => write!(f, "Offline: {:?}", e),
+            Self::Online(d) => write!(f, "Online({:?})", d),
+            Self::Offline(e) => write!(f, "Offline: {:?}", e),
         }
     }
 }
@@ -107,10 +99,10 @@ pub enum ErrorType {
 impl Debug for ErrorType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            ErrorType::Timeout => write!(f, "Timeout"),
-            ErrorType::WrongResponse => write!(f, "Wrong response: didn't match OKWhen"),
+            Self::Timeout => write!(f, "Timeout"),
+            Self::WrongResponse => write!(f, "Wrong response: didn't match OKWhen"),
             // Other errors from reqwest, see https://dtantsur.github.io/rust-openstack/reqwest/struct.Error.html
-            ErrorType::Unknown => write!(f, "Unknown error"),
+            Self::Unknown => write!(f, "Unknown error"),
         }
     }
 }
