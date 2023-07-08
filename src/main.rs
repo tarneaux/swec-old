@@ -38,6 +38,7 @@ async fn main() {
 
     let service_handler = {
         let statushistories = statushistories.clone();
+        // Get the status of a service
         let service_status_handler = warp::path!("service" / usize / "status").map(move |id| {
             let histories = statushistories.read();
             match histories.get(id) {
@@ -46,6 +47,7 @@ async fn main() {
             }
         });
         let watchers = pond.watchers.clone();
+        // Get the name of a service
         let service_info_handler =
             warp::path!("service" / usize / "name").map(move |id| match watchers.get(id) {
                 Some::<&ServiceWatcher>(watcher) => {
@@ -54,7 +56,7 @@ async fn main() {
                 }
                 None => "".to_string(),
             });
-        // Get names of all services
+        // Get the names of all services
         let service_list_handler = {
             let watchers = pond.watchers.clone();
             warp::path!("service" / "list").map(move || {
