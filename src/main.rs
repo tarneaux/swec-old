@@ -65,52 +65,34 @@ async fn main() {
             })
         };
 
-        // Get the name of a service
-        let service_name_handler = {
-            let watcher_names: Vec<_> = pond.watchers.iter().map(|w| w.name.clone()).collect();
-            warp::path!("service" / usize / "name").map(move |id| match watcher_names.get(id) {
-                Some(name) => {
-                    warp::reply::with_status(warp::reply::json(&name), warp::http::StatusCode::OK)
-                }
+        // Get the information of a service
+        let service_info_handler = {
+            let watchers = pond.watchers.clone();
+            warp::path!("service" / usize / "info").map(move |id| match watchers.get(id) {
+                Some(watcher) => warp::reply::with_status(
+                    warp::reply::json(&watcher),
+                    warp::http::StatusCode::OK,
+                ),
                 None => warp::reply::with_status(
-                    warp::reply::json(&String::new()),
+                    warp::reply::json(&Vec::<Status>::new()),
                     warp::http::StatusCode::NOT_FOUND,
                 ),
             })
         };
 
-        // Get the names of all services
-        let all_services_name_handler = {
-            let watcher_names: Vec<_> = pond.watchers.iter().map(|w| w.name.clone()).collect();
-            warp::path!("service" / "names").map(move || warp::reply::json(&watcher_names))
-        };
-
-        // Get the URL of a service
-        let service_url_handler = {
-            let watcher_urls: Vec<_> = pond.watchers.iter().map(|w| w.url.clone()).collect();
-            warp::path!("service" / usize / "url").map(move |id| match watcher_urls.get(id) {
-                Some(url) => {
-                    warp::reply::with_status(warp::reply::json(&url), warp::http::StatusCode::OK)
-                }
-                None => warp::reply::with_status(
-                    warp::reply::json(&String::new()),
-                    warp::http::StatusCode::NOT_FOUND,
-                ),
+        // Get the information of all services
+        let all_services_info_handler = {
+            let watchers = pond.watchers.clone();
+            warp::path!("service" / "infos").map(move || {
+                let watchers: Vec<_> = watchers.iter().map(|w| w.clone()).collect();
+                warp::reply::json(&watchers)
             })
-        };
-
-        // Get the URLs of all services
-        let all_services_url_handler = {
-            let watcher_urls: Vec<_> = pond.watchers.iter().map(|w| w.url.clone()).collect();
-            warp::path!("service" / "urls").map(move || warp::reply::json(&watcher_urls))
         };
 
         service_status_handler
             .or(all_services_status_handler)
-            .or(service_name_handler)
-            .or(all_services_name_handler)
-            .or(service_url_handler)
-            .or(all_services_url_handler)
+            .or(service_info_handler)
+            .or(all_services_info_handler)
     };
 
     warp::serve(service_handler)
