@@ -93,7 +93,7 @@ pub struct OkWhen {
 
 impl Default for OkWhen {
     fn default() -> Self {
-        OkWhen {
+        Self {
             status: default_ok_status(),
             content: None,
         }
