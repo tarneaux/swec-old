@@ -11,6 +11,7 @@ use std::time::Duration;
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ServiceWatcher {
     pub url: String,
+    #[serde(default)]
     pub ok_when: OkWhen,
     pub name: String,
 }
@@ -85,6 +86,15 @@ pub struct OkWhen {
     #[serde(default = "default_ok_status")]
     status: Option<u16>,
     dom: Option<String>,
+}
+
+impl Default for OkWhen {
+    fn default() -> Self {
+        OkWhen {
+            status: default_ok_status(),
+            dom: None,
+        }
+    }
 }
 
 fn default_ok_status() -> Option<u16> {
