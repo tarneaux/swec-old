@@ -100,6 +100,6 @@ impl Default for OkWhen {
     }
 }
 
-fn default_ok_status() -> Option<u16> {
+const fn default_ok_status() -> Option<u16> {
     Some(200)
 }
