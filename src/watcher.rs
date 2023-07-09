@@ -21,10 +21,10 @@ impl ServiceWatcher {
     pub async fn get_current_status(&self, timeout: &Duration) -> Status {
         let res = self.get_url(timeout).await;
         match res {
-            Ok((res, duration)) => match self.verify_status_or_content(res).await {
-                Some(err) => Status::Offline(err),
-                None => Status::Online(duration),
-            },
+            Ok((res, duration)) => self
+                .verify_status_or_content(res)
+                .await
+                .map_or_else(|| Status::Online(duration), Status::Offline),
             Err(e) => Status::Offline(e),
         }
     }
