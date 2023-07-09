@@ -24,8 +24,8 @@ impl ServiceWatcher {
             Ok((res, duration)) => self
                 .verify_status_or_content(res)
                 .await
-                .map_or_else(|| Status::Online(duration), Status::Offline),
-            Err(e) => Status::Offline(e),
+                .map_or_else(|| Status::Up(duration), Status::Down),
+            Err(e) => Status::Down(e),
         }
     }
 
@@ -71,8 +71,8 @@ impl ServiceWatcher {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Status {
-    Online(Duration),
-    Offline(ErrorType),
+    Up(Duration),
+    Down(ErrorType),
 }
 
 #[derive(Clone, Serialize, Deserialize)]
