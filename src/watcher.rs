@@ -53,7 +53,7 @@ impl ServiceWatcher {
     async fn verify_status_or_content(&self, res: reqwest::Response) -> Option<ErrorType> {
         if let Some(status) = self.ok_when.status {
             if res.status().as_u16() != status {
-                return Some(ErrorType::WrongResponse);
+                return Some(ErrorType::WrongStatus);
             }
         }
         if let Some(content) = &self.ok_when.content {
@@ -62,7 +62,7 @@ impl ServiceWatcher {
                 String::new() // Check will fail because we search in an empty string
             });
             if !body.contains(content) {
-                return Some(ErrorType::WrongResponse);
+                return Some(ErrorType::WrongContent);
             }
         }
         None
@@ -78,7 +78,8 @@ pub enum Status {
 #[derive(Clone, Serialize, Deserialize)]
 pub enum ErrorType {
     Timeout,
-    WrongResponse,
+    WrongContent,
+    WrongStatus,
     Unknown,
 }
 
