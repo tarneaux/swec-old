@@ -110,6 +110,7 @@ impl Clone for ServiceWatcherPond {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Config {
     pub watchers: Vec<ServiceWatcher>,
     pub interval: u64,

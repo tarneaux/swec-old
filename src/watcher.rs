@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 #[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ServiceWatcher {
     pub url: String,
     #[serde(default)]
@@ -82,6 +83,7 @@ pub enum ErrorType {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct OkWhen {
     #[serde(default = "default_ok_status")]
     status: Option<u16>,
