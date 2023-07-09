@@ -19,13 +19,10 @@ impl ServiceWatcher {
     pub async fn get_current_status(&self, timeout: &Duration) -> Status {
         let res = self.get_url(timeout).await;
         match res {
-            Ok((res, duration)) => {
-                let mut status = self.verify_status_or_dom(res).await;
-                if let Status::Online(_) = status {
-                    status = Status::Online(duration);
-                }
-                status
-            }
+            Ok((res, duration)) => match self.verify_status_or_dom(res).await {
+                Some(err) => Status::Offline(err),
+                None => Status::Online(duration),
+            },
             Err(e) => Status::Offline(e),
         }
     }
@@ -51,34 +48,22 @@ impl ServiceWatcher {
         }
     }
 
-    async fn verify_status_or_dom(&self, res: reqwest::Response) -> Status {
-        match &self.ok_when {
-            OkWhen::Status(status) => self.verify_status_code(res, *status).await,
-            OkWhen::InDom(dom) => {
-                let dom = dom.to_string();
-                self.verify_dom(res, &dom).await
+    async fn verify_status_or_dom(&self, res: reqwest::Response) -> Option<ErrorType> {
+        if let Some(status) = self.ok_when.status {
+            if res.status().as_u16() != status {
+                return Some(ErrorType::WrongResponse);
             }
         }
-    }
-
-    async fn verify_status_code(&self, res: reqwest::Response, wanted_status_code: u16) -> Status {
-        if res.status().as_u16() == wanted_status_code {
-            Status::Online(Duration::from_secs(0))
-        } else {
-            Status::Offline(ErrorType::WrongResponse)
+        if let Some(dom) = &self.ok_when.dom {
+            let body = res.text().await.unwrap_or_else(|e| {
+                eprintln!("Error while reading response body: {}", e);
+                String::new() // Check will fail because we search in an empty string
+            });
+            if !body.contains(dom) {
+                return Some(ErrorType::WrongResponse);
+            }
         }
-    }
-
-    async fn verify_dom(&self, res: reqwest::Response, wanted_dom: &str) -> Status {
-        let body = res.text().await.unwrap_or_else(|e| {
-            eprintln!("Error while reading body of response: {}", e);
-            "".to_string()
-        });
-        if body.contains(wanted_dom) {
-            Status::Online(Duration::from_secs(0))
-        } else {
-            Status::Offline(ErrorType::WrongResponse)
-        }
+        None
     }
 }
 
@@ -96,7 +81,12 @@ pub enum ErrorType {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub enum OkWhen {
-    Status(u16),
-    InDom(String),
+pub struct OkWhen {
+    #[serde(default = "default_ok_status")]
+    status: Option<u16>,
+    dom: Option<String>,
+}
+
+fn default_ok_status() -> Option<u16> {
+    Some(200)
 }
