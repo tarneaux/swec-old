@@ -20,7 +20,7 @@ impl ServiceWatcher {
     pub async fn get_current_status(&self, timeout: &Duration) -> Status {
         let res = self.get_url(timeout).await;
         match res {
-            Ok((res, duration)) => match self.verify_status_or_dom(res).await {
+            Ok((res, duration)) => match self.verify_status_or_content(res).await {
                 Some(err) => Status::Offline(err),
                 None => Status::Online(duration),
             },
@@ -49,18 +49,18 @@ impl ServiceWatcher {
         }
     }
 
-    async fn verify_status_or_dom(&self, res: reqwest::Response) -> Option<ErrorType> {
+    async fn verify_status_or_content(&self, res: reqwest::Response) -> Option<ErrorType> {
         if let Some(status) = self.ok_when.status {
             if res.status().as_u16() != status {
                 return Some(ErrorType::WrongResponse);
             }
         }
-        if let Some(dom) = &self.ok_when.dom {
+        if let Some(content) = &self.ok_when.content {
             let body = res.text().await.unwrap_or_else(|e| {
                 eprintln!("Error while reading response body: {}", e);
                 String::new() // Check will fail because we search in an empty string
             });
-            if !body.contains(dom) {
+            if !body.contains(content) {
                 return Some(ErrorType::WrongResponse);
             }
         }
@@ -85,14 +85,14 @@ pub enum ErrorType {
 pub struct OkWhen {
     #[serde(default = "default_ok_status")]
     status: Option<u16>,
-    dom: Option<String>,
+    content: Option<String>,
 }
 
 impl Default for OkWhen {
     fn default() -> Self {
         OkWhen {
             status: default_ok_status(),
-            dom: None,
+            content: None,
         }
     }
 }
