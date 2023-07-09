@@ -10,6 +10,7 @@ description = "Simple Web Endpoint Checker"
 [dependencies]
 clap = { version = "4.3.11", features = ["derive"] }
 parking_lot = "0.12.1"
+regex = "1.9.1"
 reqwest = "0.11.4"
 serde = { version = "1.0.163", features = ["derive"] }
 serde_yaml = "0.9.22"
