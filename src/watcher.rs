@@ -38,16 +38,16 @@ impl ServiceWatcher {
         let res = client.get(&self.url).timeout(*timeout).send().await;
         let end_time = std::time::Instant::now();
         let duration = end_time - start_time;
-        match res {
-            Ok(res) => Ok((res, duration)),
-            Err(e) => {
+        res.map_or_else(
+            |e| {
                 if e.is_timeout() {
                     Err(ErrorType::Timeout)
                 } else {
                     Err(ErrorType::Unknown)
                 }
-            }
-        }
+            },
+            |res| Ok((res, duration)),
+        )
     }
 
     async fn verify_status_or_content(&self, res: reqwest::Response) -> Option<ErrorType> {
