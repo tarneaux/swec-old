@@ -2,7 +2,7 @@
 name = "swec"
 version = "0.1.0"
 edition = "2021"
-authors = ["tarneo <tarneo@ren.es>"]
+authors = ["tarneo <tarneo@tarneo.fr>"]
 description = "Simple Web Endpoint Checker"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
