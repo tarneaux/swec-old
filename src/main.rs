@@ -5,23 +5,32 @@
  */
 
 use clap::Parser;
+use std::time::Duration;
 use warp::Filter;
 
 mod argument_parser;
-mod multi_watcher;
+mod config;
 mod watcher;
+mod watcher_pond;
 
 use argument_parser::Args;
-use multi_watcher::ServiceWatcherPond;
+use config::Config;
+use watcher_pond::ServiceWatcherPond;
 
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
 
-    let mut pond = ServiceWatcherPond::new_from_config(&args.config).unwrap_or_else(|err| {
-        eprintln!("{}", err);
+    let config = Config::read(&args.config).unwrap_or_else(|e| {
+        eprintln!("Error while reading config file: {}", e);
         std::process::exit(1);
     });
+
+    let mut pond = ServiceWatcherPond::new(
+        config.watchers,
+        config.histsize,
+        Duration::from_secs(config.interval),
+    );
 
     let watcher_handle = pond.start_watcher();
 
