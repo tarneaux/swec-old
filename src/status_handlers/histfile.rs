@@ -8,13 +8,13 @@ use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio::sync::RwLock;
 
 pub struct HistfileStatusHandler {
-    pub writer: Arc<RwLock<BufWriter<File>>>,
+    pub buf_writer: Arc<RwLock<BufWriter<File>>>,
 }
 
 impl HistfileStatusHandler {
-    pub fn new(writer: BufWriter<File>) -> Self {
+    pub fn new(buf_writer: BufWriter<File>) -> Self {
         Self {
-            writer: Arc::new(RwLock::new(writer)),
+            buf_writer: Arc::new(RwLock::new(buf_writer)),
         }
     }
 
@@ -29,16 +29,13 @@ impl HistfileStatusHandler {
             .collect::<Vec<Status>>();
         let statuses = serde_json::to_string(&statuses).unwrap();
 
-        let mut writer = self
-            .writer
-            .try_write()
-            .map_err(|_| HistfileError::AlreadyLocked)?;
-        writer
+        let mut buf_writer = self.buf_writer.write().await;
+        buf_writer
             .write_all(statuses.as_bytes())
             .await
             .map_err(|e| HistfileError::IoError(e))?;
-        writer.flush().await.unwrap();
-        return Ok(());
+        buf_writer.flush().await.unwrap();
+        Ok(())
     }
 }
 
@@ -57,16 +54,12 @@ impl StatusHandler for HistfileStatusHandler {
 
 #[derive(Debug)]
 pub enum HistfileError {
-    AlreadyLocked,
     IoError(tokio::io::Error),
 }
 
 impl std::fmt::Display for HistfileError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            HistfileError::AlreadyLocked => {
-                write!(f, "HistfileError: Already locked. This could indicate too many concurrent writes to the histfile.")
-            }
             HistfileError::IoError(e) => write!(f, "HistfileError: {}", e),
         }
     }
