@@ -6,7 +6,6 @@
 
 use crate::watcher::ServiceWatcher;
 use serde::{Deserialize, Serialize};
-use serde_yaml;
 use std::fmt::{Display, Formatter};
 
 #[derive(Serialize, Deserialize)]
