@@ -5,16 +5,24 @@
  */
 
 use clap::Parser;
+use std::sync::Arc;
 use std::time::Duration;
+use tokio::fs::File;
+use tokio::io::BufWriter;
+use tokio::sync::RwLock;
 use warp::Filter;
 
 mod argument_parser;
 mod config;
+mod status_handlers;
 mod watcher;
 mod watcher_pond;
 
 use argument_parser::Args;
 use config::Config;
+use status_handlers::histfile::HistfileStatusHandler;
+use watcher::ServiceWatcher;
+use watcher::Status;
 use watcher_pond::ServiceWatcherPond;
 
 #[tokio::main]
@@ -30,66 +38,47 @@ async fn main() {
         config.watchers,
         config.histsize,
         Duration::from_secs(config.interval),
+        vec![Box::new(HistfileStatusHandler::new(BufWriter::new(
+            File::create("./histfile").await.unwrap(),
+        )))],
     );
 
-    let watcher_handle = pond.start_watcher();
+    let status_histories = pond.status_histories.clone();
+    let watchers = pond.watchers.clone();
 
+    tokio::spawn(async move {
+        webserver(status_histories, watchers).await;
+    });
+
+    pond.watch().await;
+}
+
+async fn webserver(status_histories: Arc<RwLock<Vec<Vec<Status>>>>, watchers: Vec<ServiceWatcher>) {
     let service_handler = {
         // Get the status of a service
         let service_status_handler = {
-            let status_histories = pond.status_histories.clone();
-            warp::path!("service" / usize / "status").map(move |id| {
-                let history = status_histories.read().get(id).cloned();
-                history.map_or_else(
-                    || {
-                        warp::reply::with_status(
-                            warp::reply::json(&"Not found"),
-                            warp::http::StatusCode::NOT_FOUND,
-                        )
-                    },
-                    |history| {
-                        warp::reply::with_status(
-                            warp::reply::json(&history),
-                            warp::http::StatusCode::OK,
-                        )
-                    },
-                )
-            })
+            let status_histories = status_histories.clone();
+            warp::path!("service" / usize / "status")
+                .then(move |id| handle_service_status(status_histories.clone(), id))
         };
 
         // Get the status of all services
         let all_services_status_handler = {
-            let status_histories = pond.status_histories.clone();
-            warp::path!("service" / "status").map(move || {
-                let histories = status_histories.read().clone();
-                warp::reply::json(&histories)
-            })
+            let status_histories = status_histories.clone();
+            warp::path!("service" / "status")
+                .then(move || handle_all_services_status(status_histories.clone()))
         };
 
         // Get the information of a service
         let service_info_handler = {
-            let watchers = pond.watchers.clone();
-            warp::path!("service" / usize / "info").map(move |id| {
-                watchers.get(id).map_or_else(
-                    || {
-                        warp::reply::with_status(
-                            warp::reply::json(&"Not found"),
-                            warp::http::StatusCode::NOT_FOUND,
-                        )
-                    },
-                    |watcher| {
-                        warp::reply::with_status(
-                            warp::reply::json(&watcher),
-                            warp::http::StatusCode::OK,
-                        )
-                    },
-                )
-            })
+            let watchers = watchers.clone();
+            warp::path!("service" / usize / "info")
+                .then(move |id| handle_service_info(watchers.clone(), id))
         };
 
         // Get the information of all services
         let all_services_info_handler = {
-            let watchers = pond.watchers.clone();
+            let watchers = watchers.clone();
             warp::path!("service" / "info").map(move || warp::reply::json(&watchers))
         };
 
@@ -102,5 +91,39 @@ async fn main() {
     warp::serve(service_handler)
         .run(([127, 0, 0, 1], 3030))
         .await;
-    watcher_handle.abort();
+}
+
+async fn handle_service_status(
+    status_histories: Arc<RwLock<Vec<Vec<Status>>>>,
+    id: usize,
+) -> impl warp::Reply {
+    let history = status_histories.read().await.get(id).cloned();
+    history.map_or_else(
+        || {
+            warp::reply::with_status(
+                warp::reply::json(&"Not found"),
+                warp::http::StatusCode::NOT_FOUND,
+            )
+        },
+        |history| warp::reply::with_status(warp::reply::json(&history), warp::http::StatusCode::OK),
+    )
+}
+
+async fn handle_all_services_status(
+    status_histories: Arc<RwLock<Vec<Vec<Status>>>>,
+) -> impl warp::Reply {
+    let histories = status_histories.read().await.clone();
+    warp::reply::with_status(warp::reply::json(&histories), warp::http::StatusCode::OK)
+}
+
+async fn handle_service_info(watchers: Vec<ServiceWatcher>, id: usize) -> impl warp::Reply {
+    watchers.get(id).map_or_else(
+        || {
+            warp::reply::with_status(
+                warp::reply::json(&"Not found"),
+                warp::http::StatusCode::NOT_FOUND,
+            )
+        },
+        |watcher| warp::reply::with_status(warp::reply::json(&watcher), warp::http::StatusCode::OK),
+    )
 }

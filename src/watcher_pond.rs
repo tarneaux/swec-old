@@ -4,10 +4,12 @@
  * License: GPLv2
  */
 
+use crate::status_handlers::StatusHandler;
 use crate::watcher::{ServiceWatcher, Status};
-use parking_lot::RwLock;
+use futures::future::join_all;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::RwLock;
 use tokio::task::{JoinError, JoinSet};
 
 pub struct ServiceWatcherPond {
@@ -15,10 +17,16 @@ pub struct ServiceWatcherPond {
     pub status_histories: Arc<RwLock<Vec<Vec<Status>>>>,
     pub histsize: usize,
     pub interval: Duration,
+    pub status_handlers: Vec<Box<dyn StatusHandler>>,
 }
 
 impl ServiceWatcherPond {
-    pub fn new(watchers: Vec<ServiceWatcher>, histsize: usize, interval: Duration) -> Self {
+    pub fn new(
+        watchers: Vec<ServiceWatcher>,
+        histsize: usize,
+        interval: Duration,
+        status_handlers: Vec<Box<dyn StatusHandler>>,
+    ) -> Self {
         let mut status_histories = Vec::with_capacity(watchers.len());
         // We immediately allocate the maximum amount of memory that we will need for the history
         // of each watcher. This way:
@@ -34,10 +42,36 @@ impl ServiceWatcherPond {
             status_histories,
             histsize,
             interval,
+            status_handlers,
         }
     }
 
-    async fn run_once(&mut self, timeout: Duration) -> Result<(), JoinError> {
+    pub async fn watch(&mut self) -> tokio::task::JoinHandle<()> {
+        loop {
+            let min_time = self.interval;
+
+            let min_time_handle = tokio::spawn(async move {
+                tokio::time::sleep(min_time).await;
+            });
+
+            match self.run_all_watchers(self.interval).await {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("Error while running watcher: {:?}", e);
+                }
+            }
+
+            self.run_all_status_handlers().await;
+
+            // Wait for the interval to pass so that we don't
+            // change the frequency of checks
+            min_time_handle.await.unwrap_or_else(|e| {
+                eprintln!("Error while waiting for timeout: {:?}", e);
+            });
+        }
+    }
+
+    async fn run_all_watchers(&mut self, timeout: Duration) -> Result<(), JoinError> {
         let mut join_set = JoinSet::new();
 
         for (id, watcher) in self.watchers.iter().enumerate() {
@@ -51,7 +85,7 @@ impl ServiceWatcherPond {
                 None => break,
             }?;
             {
-                let status_histories = &mut self.status_histories.write();
+                let status_histories = &mut self.status_histories.write().await;
                 let history = &mut status_histories[id];
                 if history.len() == self.histsize {
                     history.remove(0);
@@ -62,38 +96,12 @@ impl ServiceWatcherPond {
         Ok(())
     }
 
-    pub fn start_watcher(&mut self) -> tokio::task::JoinHandle<()> {
-        let mut copied_self = self.clone();
-        tokio::spawn(async move {
-            loop {
-                let timeout_handle = tokio::spawn(async move {
-                    tokio::time::sleep(copied_self.interval).await;
-                });
-
-                match copied_self.run_once(copied_self.interval).await {
-                    Ok(_) => {}
-                    Err(e) => {
-                        eprintln!("Error while running watcher: {:?}", e);
-                    }
-                }
-
-                // Wait for the interval to pass so that we don't
-                // change the frequency of checks
-                timeout_handle.await.unwrap_or_else(|e| {
-                    eprintln!("Error while waiting for timeout: {:?}", e);
-                });
-            }
-        })
-    }
-}
-
-impl Clone for ServiceWatcherPond {
-    fn clone(&self) -> Self {
-        Self {
-            watchers: self.watchers.clone(),
-            status_histories: self.status_histories.clone(),
-            histsize: self.histsize,
-            interval: self.interval,
-        }
+    async fn run_all_status_handlers(&self) {
+        join_all(
+            self.status_handlers
+                .iter()
+                .map(|handler| handler.handle(self.status_histories.clone())),
+        )
+        .await;
     }
 }
