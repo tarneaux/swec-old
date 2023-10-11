@@ -4,7 +4,7 @@
  * License: GPLv2
  */
 
-use crate::watcher::ServiceWatcher;
+use crate::watchers::ServiceWatcher;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 

@@ -5,7 +5,7 @@
  */
 
 pub mod histfile;
-use crate::watcher::{ServiceWatcher, Status};
+use crate::watchers::{ServiceWatcher, Status};
 use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::RwLock;

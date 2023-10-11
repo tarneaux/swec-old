@@ -15,17 +15,16 @@ use warp::Filter;
 mod argument_parser;
 mod config;
 mod status_handlers;
-mod watcher;
-mod watcher_pond;
+mod watchers;
 
 use argument_parser::Args;
 use config::Config;
 use status_handlers::histfile::{
     read_histories_from_file, restore_histories_to_pond, HistfileStatusHandler,
 };
-use watcher::ServiceWatcher;
-use watcher::Status;
-use watcher_pond::ServiceWatcherPond;
+use watchers::pond::ServiceWatcherPond;
+use watchers::ServiceWatcher;
+use watchers::Status;
 
 #[tokio::main]
 async fn main() {

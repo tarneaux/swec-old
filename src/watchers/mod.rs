@@ -4,6 +4,8 @@
  * License: GPLv2
  */
 
+pub mod pond;
+
 use regex::Regex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};

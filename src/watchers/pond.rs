@@ -5,7 +5,7 @@
  */
 
 use crate::status_handlers::StatusHandler;
-use crate::watcher::{ServiceWatcher, Status};
+use crate::watchers::{ServiceWatcher, Status};
 use futures::future::join_all;
 use std::sync::Arc;
 use std::time::Duration;
