@@ -4,9 +4,8 @@
  * License: GPLv2
  */
 
-use super::StatusHandler;
-use crate::watchers::pond::ServiceWatcherPond;
-use crate::watchers::{status::Status, ServiceWatcher};
+use super::Handler;
+use crate::watchers::{Status, Watcher, WatcherPond};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -16,11 +15,11 @@ use tokio::io::AsyncSeekExt;
 use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio::sync::RwLock;
 
-pub struct HistfileStatusHandler {
+pub struct HistfileHandler {
     pub buf_writer: Arc<RwLock<BufWriter<File>>>,
 }
 
-impl HistfileStatusHandler {
+impl HistfileHandler {
     pub fn new(buf_writer: BufWriter<File>) -> Self {
         Self {
             buf_writer: Arc::new(RwLock::new(buf_writer)),
@@ -30,7 +29,7 @@ impl HistfileStatusHandler {
     async fn handle_async(
         &self,
         statuses: Arc<RwLock<Vec<Vec<Status>>>>,
-        watchers: &Vec<ServiceWatcher>,
+        watchers: &Vec<Watcher>,
     ) -> Result<(), HistfileError> {
         let statuses = statuses.read().await;
 
@@ -59,12 +58,8 @@ impl HistfileStatusHandler {
 }
 
 #[async_trait]
-impl StatusHandler for HistfileStatusHandler {
-    async fn handle(
-        &self,
-        statuses: Arc<RwLock<Vec<Vec<Status>>>>,
-        watchers: &Vec<ServiceWatcher>,
-    ) {
+impl Handler for HistfileHandler {
+    async fn handle(&self, statuses: Arc<RwLock<Vec<Vec<Status>>>>, watchers: &Vec<Watcher>) {
         self.handle_async(statuses, &watchers)
             .await
             .unwrap_or_else(|e| {
@@ -86,8 +81,8 @@ pub fn read_histories_from_file(path: &str) -> Result<Vec<HistoryWithWatcher>, H
 
 pub async fn restore_histories_to_pond(
     histories: Vec<HistoryWithWatcher>,
-    pond: ServiceWatcherPond,
-) -> ServiceWatcherPond {
+    pond: WatcherPond,
+) -> WatcherPond {
     let pond = pond;
     {
         let mut status_histories = pond.status_histories.write().await;
@@ -126,6 +121,6 @@ impl std::fmt::Display for HistfileError {
 
 #[derive(Serialize, Deserialize)]
 pub struct HistoryWithWatcher {
-    watcher: ServiceWatcher,
+    watcher: Watcher,
     history: Vec<Status>,
 }

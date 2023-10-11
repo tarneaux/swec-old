@@ -14,17 +14,13 @@ use warp::Filter;
 
 mod argument_parser;
 mod config;
-mod status_handlers;
+mod handlers;
 mod watchers;
 
 use argument_parser::Args;
 use config::Config;
-use status_handlers::histfile::{
-    read_histories_from_file, restore_histories_to_pond, HistfileStatusHandler,
-};
-use watchers::pond::ServiceWatcherPond;
-use watchers::status::Status;
-use watchers::ServiceWatcher;
+use handlers::histfile::{read_histories_from_file, restore_histories_to_pond, HistfileHandler};
+use watchers::{Status, Watcher, WatcherPond};
 
 #[tokio::main]
 async fn main() {
@@ -45,11 +41,11 @@ async fn main() {
         }
     };
 
-    let pond = ServiceWatcherPond::new(
+    let pond = WatcherPond::new(
         config.watchers,
         config.histsize,
         Duration::from_secs(config.interval),
-        vec![Box::new(HistfileStatusHandler::new(BufWriter::new(file)))],
+        vec![Box::new(HistfileHandler::new(BufWriter::new(file)))],
     );
 
     let mut pond = match histories {
@@ -74,7 +70,7 @@ async fn main() {
     });
 }
 
-async fn webserver(status_histories: Arc<RwLock<Vec<Vec<Status>>>>, watchers: Vec<ServiceWatcher>) {
+async fn webserver(status_histories: Arc<RwLock<Vec<Vec<Status>>>>, watchers: Vec<Watcher>) {
     let service_handler = {
         // Get the status of a service
         let service_status_handler = {
@@ -137,7 +133,7 @@ async fn handle_all_services_status(
     warp::reply::with_status(warp::reply::json(&histories), warp::http::StatusCode::OK)
 }
 
-async fn handle_service_info(watchers: Vec<ServiceWatcher>, id: usize) -> impl warp::Reply {
+async fn handle_service_info(watchers: Vec<Watcher>, id: usize) -> impl warp::Reply {
     watchers.get(id).map_or_else(
         || {
             warp::reply::with_status(

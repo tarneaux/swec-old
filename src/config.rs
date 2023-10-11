@@ -4,14 +4,14 @@
  * License: GPLv2
  */
 
-use crate::watchers::ServiceWatcher;
+use crate::watchers::Watcher;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-    pub watchers: Vec<ServiceWatcher>,
+    pub watchers: Vec<Watcher>,
     pub interval: u64,
     pub histsize: usize,
 }

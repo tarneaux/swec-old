@@ -5,13 +5,13 @@
  */
 
 pub mod histfile;
-use crate::watchers::{status::Status, ServiceWatcher};
+use crate::watchers::{Status, Watcher};
 use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
 #[async_trait]
-pub trait StatusHandler {
-    async fn handle(&self, statuses: Arc<RwLock<Vec<Vec<Status>>>>, watchers: &Vec<ServiceWatcher>);
+pub trait Handler {
+    async fn handle(&self, statuses: Arc<RwLock<Vec<Vec<Status>>>>, watchers: &Vec<Watcher>);
     fn get_name(&self) -> &str;
 }

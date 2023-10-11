@@ -4,28 +4,28 @@
  * License: GPLv2
  */
 
-use super::{ServiceWatcher, Status};
-use crate::status_handlers::StatusHandler;
+use super::{Status, Watcher};
+use crate::handlers::Handler;
 use futures::future::join_all;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio::task::{JoinError, JoinSet};
 
-pub struct ServiceWatcherPond {
-    pub watchers: Vec<ServiceWatcher>,
+pub struct WatcherPond {
+    pub watchers: Vec<Watcher>,
     pub status_histories: Arc<RwLock<Vec<Vec<Status>>>>,
     pub histsize: usize,
     pub interval: Duration,
-    pub status_handlers: Vec<Box<dyn StatusHandler>>,
+    pub status_handlers: Vec<Box<dyn Handler>>,
 }
 
-impl ServiceWatcherPond {
+impl WatcherPond {
     pub fn new(
-        watchers: Vec<ServiceWatcher>,
+        watchers: Vec<Watcher>,
         histsize: usize,
         interval: Duration,
-        status_handlers: Vec<Box<dyn StatusHandler>>,
+        status_handlers: Vec<Box<dyn Handler>>,
     ) -> Self {
         let mut status_histories = Vec::with_capacity(watchers.len());
         // We immediately allocate the maximum amount of memory that we will need for the history
