@@ -9,7 +9,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct ServiceWatcher {
     pub url: String,
@@ -87,7 +87,7 @@ pub enum ErrorType {
     Unknown,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct OkWhen {
     #[serde(default = "default_ok_status")]
@@ -99,6 +99,14 @@ pub struct OkWhen {
         default = "default_ok_regex"
     )]
     content_regex: Regex,
+}
+
+impl PartialEq for OkWhen {
+    fn eq(&self, other: &Self) -> bool {
+        self.status == other.status
+            && self.content == other.content
+            && self.content_regex.as_str() == other.content_regex.as_str()
+    }
 }
 
 impl Default for OkWhen {

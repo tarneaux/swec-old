@@ -100,7 +100,7 @@ impl ServiceWatcherPond {
         join_all(
             self.status_handlers
                 .iter()
-                .map(|handler| handler.handle(self.status_histories.clone())),
+                .map(|handler| handler.handle(self.status_histories.clone(), &self.watchers)),
         )
         .await;
     }
