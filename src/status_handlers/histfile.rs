@@ -6,7 +6,7 @@
 
 use crate::status_handlers::StatusHandler;
 use crate::watchers::pond::ServiceWatcherPond;
-use crate::watchers::{ServiceWatcher, Status};
+use crate::watchers::{status::Status, ServiceWatcher};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json;

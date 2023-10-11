@@ -23,8 +23,8 @@ use status_handlers::histfile::{
     read_histories_from_file, restore_histories_to_pond, HistfileStatusHandler,
 };
 use watchers::pond::ServiceWatcherPond;
+use watchers::status::Status;
 use watchers::ServiceWatcher;
-use watchers::Status;
 
 #[tokio::main]
 async fn main() {
