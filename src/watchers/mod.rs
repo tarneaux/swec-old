@@ -49,6 +49,10 @@ impl ServiceWatcher {
                 if e.is_timeout() {
                     Err(DownReason::Timeout)
                 } else {
+                    eprintln!(
+                        "Status of {} is Down::Unknown. Error returned by reqwest: {}",
+                        self.name, e
+                    );
                     Err(DownReason::Unknown)
                 }
             },
