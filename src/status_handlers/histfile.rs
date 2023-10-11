@@ -4,7 +4,7 @@
  * License: GPLv2
  */
 
-use crate::status_handlers::StatusHandler;
+use super::StatusHandler;
 use crate::watchers::pond::ServiceWatcherPond;
 use crate::watchers::{status::Status, ServiceWatcher};
 use async_trait::async_trait;
