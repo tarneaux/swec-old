@@ -10,11 +10,11 @@ use std::time::Duration;
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Status {
     Up(Duration),
-    Down(ErrorType),
+    Down(DownReason),
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub enum ErrorType {
+pub enum DownReason {
     Timeout,
     WrongContent,
     WrongStatus,
