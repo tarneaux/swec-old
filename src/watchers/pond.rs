@@ -4,7 +4,7 @@
  * License: GPLv2
  */
 
-use super::{Status, Watcher};
+use super::{TimeStampedStatus, Watcher};
 use crate::handlers::Handler;
 use futures::future::join_all;
 use std::sync::Arc;
@@ -14,7 +14,7 @@ use tokio::task::{JoinError, JoinSet};
 
 pub struct WatcherPond {
     pub watchers: Vec<Watcher>,
-    pub status_histories: Arc<RwLock<Vec<Vec<Status>>>>,
+    pub status_histories: Arc<RwLock<Vec<Vec<TimeStampedStatus>>>>,
     pub histsize: usize,
     pub interval: Duration,
     pub status_handlers: Vec<Box<dyn Handler>>,
@@ -76,7 +76,10 @@ impl WatcherPond {
 
         for (id, watcher) in self.watchers.iter().enumerate() {
             let watcher = watcher.clone();
-            join_set.spawn(async move { (watcher.get_current_status(&timeout).await, id) });
+            join_set.spawn(async move {
+                let current_status = watcher.get_current_status(&timeout).await;
+                (TimeStampedStatus::new_now(current_status), id)
+            });
         }
 
         loop {

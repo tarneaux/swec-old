@@ -6,6 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+use std::time::SystemTime;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Status {
@@ -19,4 +20,19 @@ pub enum DownReason {
     WrongContent,
     WrongStatus,
     Unknown,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct TimeStampedStatus {
+    pub status: Status,
+    pub time: SystemTime,
+}
+
+impl TimeStampedStatus {
+    pub fn new_now(status: Status) -> Self {
+        Self {
+            status,
+            time: SystemTime::now(),
+        }
+    }
 }

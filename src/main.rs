@@ -20,7 +20,7 @@ mod watchers;
 use argument_parser::Args;
 use config::Config;
 use handlers::histfile::{read_histories_from_file, restore_histories_to_pond, HistfileHandler};
-use watchers::{Status, Watcher, WatcherPond};
+use watchers::{TimeStampedStatus, Watcher, WatcherPond};
 
 #[tokio::main]
 async fn main() {
@@ -70,7 +70,10 @@ async fn main() {
     });
 }
 
-async fn webserver(status_histories: Arc<RwLock<Vec<Vec<Status>>>>, watchers: Vec<Watcher>) {
+async fn webserver(
+    status_histories: Arc<RwLock<Vec<Vec<TimeStampedStatus>>>>,
+    watchers: Vec<Watcher>,
+) {
     let service_handler = {
         // Get the status of a service
         let service_status_handler = {
@@ -111,7 +114,7 @@ async fn webserver(status_histories: Arc<RwLock<Vec<Vec<Status>>>>, watchers: Ve
 }
 
 async fn handle_service_status(
-    status_histories: Arc<RwLock<Vec<Vec<Status>>>>,
+    status_histories: Arc<RwLock<Vec<Vec<TimeStampedStatus>>>>,
     id: usize,
 ) -> impl warp::Reply {
     let history = status_histories.read().await.get(id).cloned();
@@ -127,7 +130,7 @@ async fn handle_service_status(
 }
 
 async fn handle_all_services_status(
-    status_histories: Arc<RwLock<Vec<Vec<Status>>>>,
+    status_histories: Arc<RwLock<Vec<Vec<TimeStampedStatus>>>>,
 ) -> impl warp::Reply {
     let histories = status_histories.read().await.clone();
     warp::reply::with_status(warp::reply::json(&histories), warp::http::StatusCode::OK)

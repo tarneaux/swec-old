@@ -5,7 +5,7 @@
  */
 
 use super::Handler;
-use crate::watchers::{Status, Watcher, WatcherPond};
+use crate::watchers::{TimeStampedStatus, Watcher, WatcherPond};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -28,7 +28,7 @@ impl HistfileHandler {
 
     async fn handle_async(
         &self,
-        statuses: Arc<RwLock<Vec<Vec<Status>>>>,
+        statuses: Arc<RwLock<Vec<Vec<TimeStampedStatus>>>>,
         watchers: &Vec<Watcher>,
     ) -> Result<(), HistfileError> {
         let statuses = statuses.read().await;
@@ -52,14 +52,17 @@ impl HistfileHandler {
             .write_all(statuses.as_bytes())
             .await
             .map_err(|e| HistfileError::IoError(e))?;
-        buf_writer.flush().await.unwrap();
         Ok(())
     }
 }
 
 #[async_trait]
 impl Handler for HistfileHandler {
-    async fn handle(&self, statuses: Arc<RwLock<Vec<Vec<Status>>>>, watchers: &Vec<Watcher>) {
+    async fn handle(
+        &self,
+        statuses: Arc<RwLock<Vec<Vec<TimeStampedStatus>>>>,
+        watchers: &Vec<Watcher>,
+    ) {
         self.handle_async(statuses, &watchers)
             .await
             .unwrap_or_else(|e| {
@@ -122,5 +125,5 @@ impl std::fmt::Display for HistfileError {
 #[derive(Serialize, Deserialize)]
 pub struct HistoryWithWatcher {
     watcher: Watcher,
-    history: Vec<Status>,
+    history: Vec<TimeStampedStatus>,
 }
