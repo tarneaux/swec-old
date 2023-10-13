@@ -1,0 +1,15 @@
+watchers:
+  - name: "google"
+    url: "https://www.google.com"
+    ok_when:
+      content: "this is not in the page"
+  - name: "hello"
+    url: "https://google.com/arstwk"
+  - name: "google2"
+    url: "https://www.google.com"
+    ok_when:
+      content_regex: "google"
+  - name: "google3"
+    url: "https://www.google.com"
+interval: 1
+histsize: 20
