@@ -15,7 +15,7 @@ pub trait Handler: Send + Sync {
     async fn handle(
         &self,
         statuses: Arc<RwLock<Vec<Vec<TimeStampedStatus>>>>,
-        watchers: &Vec<Watcher>,
+        watchers: &'_ [Watcher],
     );
     async fn shutdown(&self) {}
     fn get_name(&self) -> &str;

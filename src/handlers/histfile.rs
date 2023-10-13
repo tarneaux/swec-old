@@ -28,7 +28,7 @@ impl HistfileHandler {
     async fn handle_async(
         &self,
         statuses: Arc<RwLock<Vec<Vec<TimeStampedStatus>>>>,
-        watchers: &Vec<Watcher>,
+        watchers: &[Watcher],
     ) -> Result<(), HistfileError> {
         let statuses = statuses.read().await;
 
@@ -42,15 +42,14 @@ impl HistfileHandler {
             })
             .collect();
 
-        let statuses =
-            serde_json::to_string(&statuses_map).map_err(|e| HistfileError::SerdeError(e))?;
+        let statuses = serde_json::to_string(&statuses_map).map_err(HistfileError::SerdeError)?;
 
         let mut buf_writer = self.buf_writer.write().await;
         buf_writer.seek(std::io::SeekFrom::Start(0)).await.unwrap();
         buf_writer
             .write_all(statuses.as_bytes())
             .await
-            .map_err(|e| HistfileError::IoError(e))?;
+            .map_err(HistfileError::IoError)?;
         Ok(())
     }
 }
@@ -60,9 +59,9 @@ impl Handler for HistfileHandler {
     async fn handle(
         &self,
         statuses: Arc<RwLock<Vec<Vec<TimeStampedStatus>>>>,
-        watchers: &Vec<Watcher>,
+        watchers: &'_ [Watcher],
     ) {
-        self.handle_async(statuses, &watchers)
+        self.handle_async(statuses, watchers)
             .await
             .unwrap_or_else(|e| {
                 eprintln!("Error while writing histfile: {}", e);
