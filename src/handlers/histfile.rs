@@ -21,9 +21,8 @@ pub struct HistfileHandler {
 
 impl HistfileHandler {
     pub fn new(buf_writer: BufWriter<File>) -> Self {
-        Self {
-            buf_writer: Arc::new(RwLock::new(buf_writer)),
-        }
+        let buf_writer = Arc::new(RwLock::new(buf_writer));
+        Self { buf_writer }
     }
 
     async fn handle_async(
@@ -68,6 +67,13 @@ impl Handler for HistfileHandler {
             .unwrap_or_else(|e| {
                 eprintln!("Error while writing histfile: {}", e);
             })
+    }
+
+    async fn shutdown(&self) {
+        let mut buf_writer = self.buf_writer.write().await;
+        buf_writer.shutdown().await.unwrap_or_else(|e| {
+            eprintln!("Error while shutting down histfile handler: {}", e);
+        });
     }
 
     fn get_name(&self) -> &str {

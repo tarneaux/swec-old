@@ -7,6 +7,8 @@
 use super::{TimeStampedStatus, Watcher};
 use crate::handlers::Handler;
 use futures::future::join_all;
+use signal_hook::consts::*;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -17,7 +19,8 @@ pub struct WatcherPond {
     pub status_histories: Arc<RwLock<Vec<Vec<TimeStampedStatus>>>>,
     pub histsize: usize,
     pub interval: Duration,
-    pub status_handlers: Vec<Box<dyn Handler>>,
+    pub handlers: Vec<Box<dyn Handler>>,
+    pub is_stopping: Arc<AtomicBool>,
 }
 
 impl WatcherPond {
@@ -25,7 +28,7 @@ impl WatcherPond {
         watchers: Vec<Watcher>,
         histsize: usize,
         interval: Duration,
-        status_handlers: Vec<Box<dyn Handler>>,
+        handlers: Vec<Box<dyn Handler>>,
     ) -> Self {
         let mut status_histories = Vec::with_capacity(watchers.len());
         // We immediately allocate the maximum amount of memory that we will need for the history
@@ -37,22 +40,34 @@ impl WatcherPond {
         status_histories.resize(watchers.len(), Vec::with_capacity(histsize + 1));
 
         let status_histories = Arc::new(RwLock::new(status_histories));
+
+        let is_stopping = Arc::new(AtomicBool::new(false));
+        for signal in [SIGINT, SIGTERM, SIGQUIT].iter() {
+            let is_stopping = is_stopping.clone();
+            signal_hook::flag::register(*signal, is_stopping).unwrap();
+        }
+
         Self {
             watchers,
             status_histories,
             histsize,
             interval,
-            status_handlers,
+            handlers,
+            is_stopping,
         }
     }
 
-    pub async fn watch(&mut self) -> tokio::task::JoinHandle<()> {
+    pub async fn watch(&mut self) {
         loop {
             let min_time = self.interval;
 
             let min_time_handle = tokio::spawn(async move {
                 tokio::time::sleep(min_time).await;
             });
+
+            if self.shutdown_if_needed().await {
+                break;
+            }
 
             match self.run_all_watchers(self.interval).await {
                 Ok(_) => {}
@@ -61,13 +76,33 @@ impl WatcherPond {
                 }
             }
 
-            self.run_all_status_handlers().await;
+            self.run_all_handlers().await;
+
+            if self.shutdown_if_needed().await {
+                break;
+            }
 
             // Wait for the interval to pass so that we don't
             // change the frequency of checks
             min_time_handle.await.unwrap_or_else(|e| {
-                eprintln!("Error while waiting for timeout: {:?}", e);
+                eprintln!("Error while waiting for end of interval: {:?}", e);
             });
+        }
+    }
+
+    async fn shutdown_if_needed(&mut self) -> bool {
+        if self.is_stopping.load(Ordering::Relaxed) {
+            self.shutdown().await;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub async fn shutdown(&mut self) {
+        eprintln!("Pond: shutting down all handlers...");
+        for handler in self.handlers.iter() {
+            handler.shutdown().await;
         }
     }
 
@@ -99,9 +134,9 @@ impl WatcherPond {
         Ok(())
     }
 
-    async fn run_all_status_handlers(&self) {
+    async fn run_all_handlers(&self) {
         join_all(
-            self.status_handlers
+            self.handlers
                 .iter()
                 .map(|handler| handler.handle(self.status_histories.clone(), &self.watchers)),
         )

@@ -11,11 +11,12 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 #[async_trait]
-pub trait Handler {
+pub trait Handler: Send + Sync {
     async fn handle(
         &self,
         statuses: Arc<RwLock<Vec<Vec<TimeStampedStatus>>>>,
         watchers: &Vec<Watcher>,
     );
+    async fn shutdown(&self) {}
     fn get_name(&self) -> &str;
 }
