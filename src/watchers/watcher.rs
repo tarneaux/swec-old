@@ -57,7 +57,7 @@ impl Watcher {
             }
         }
         let body = res.text().await.unwrap_or_else(|e| {
-            eprintln!("Error while reading response body: {}", e);
+            eprintln!("Error while reading response body: {e}");
             String::new() // Check will fail because we search in an empty string
         });
         if let Some(content) = &self.ok_when.content {

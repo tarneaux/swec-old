@@ -38,7 +38,7 @@ const fn default_ok_status() -> Option<u16> {
 }
 
 fn default_ok_regex() -> Regex {
-    Regex::new("").unwrap()
+    Regex::new("").unwrap_or_else(|_| panic!("Failed to compile default regex."))
 }
 
 fn regex_serialize<S>(regex: &Regex, serializer: S) -> Result<S::Ok, S::Error>

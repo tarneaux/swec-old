@@ -18,8 +18,8 @@ pub enum Status {
 impl Display for Status {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Status::Up(duration) => write!(f, "Up: took {}", duration.as_secs()),
-            Status::Down(reason) => write!(f, "Down: {}", reason),
+            Self::Up(duration) => write!(f, "Up: took {}", duration.as_secs()),
+            Self::Down(reason) => write!(f, "Down: {reason}"),
         }
     }
 }
@@ -35,10 +35,10 @@ pub enum DownReason {
 impl Display for DownReason {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            DownReason::Timeout => write!(f, "Timeout"),
-            DownReason::WrongContent => write!(f, "Wrong content"),
-            DownReason::WrongStatus => write!(f, "Wrong status"),
-            DownReason::Unknown => write!(f, "Unknown"),
+            Self::Timeout => write!(f, "Timeout"),
+            Self::WrongContent => write!(f, "Wrong content"),
+            Self::WrongStatus => write!(f, "Wrong status"),
+            Self::Unknown => write!(f, "Unknown"),
         }
     }
 }

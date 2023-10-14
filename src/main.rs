@@ -26,7 +26,7 @@ async fn main() {
     let args = Args::parse();
 
     let config = Config::read(&args.config).unwrap_or_else(|e| {
-        eprintln!("Error while reading config file: {}", e);
+        eprintln!("Error while reading config file: {e}");
         std::process::exit(1);
     });
 
@@ -35,7 +35,7 @@ async fn main() {
     let file = match File::create("./histfile").await {
         Ok(file) => file,
         Err(e) => {
-            eprintln!("Error while opening histfile: {}", e);
+            eprintln!("Error while opening histfile: {e}");
             std::process::exit(1);
         }
     };
@@ -50,7 +50,7 @@ async fn main() {
     let mut pond = match histories {
         Ok(histories) => restore_histories_to_pond(histories, pond).await,
         Err(e) => {
-            eprintln!("Error while reading histfile: {}", e);
+            eprintln!("Error while reading histfile: {e}");
             pond
         }
     };

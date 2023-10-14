@@ -7,7 +7,7 @@
 use super::{TimeStampedStatus, Watcher};
 use crate::handlers::Handler;
 use futures::future::join_all;
-use signal_hook::consts::*;
+use signal_hook::consts::{SIGINT, SIGQUIT, SIGTERM};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -42,9 +42,11 @@ impl WatcherPond {
         let status_histories = Arc::new(RwLock::new(status_histories));
 
         let is_stopping = Arc::new(AtomicBool::new(false));
-        for signal in [SIGINT, SIGTERM, SIGQUIT].iter() {
+        for signal in &[SIGINT, SIGTERM, SIGQUIT] {
             let is_stopping = is_stopping.clone();
-            signal_hook::flag::register(*signal, is_stopping).unwrap();
+            signal_hook::flag::register(*signal, is_stopping).unwrap_or_else(|e| {
+                panic!("Failed to register signal handler: {e:?}");
+            });
         }
 
         Self {
@@ -70,9 +72,9 @@ impl WatcherPond {
             }
 
             match self.run_all_watchers(self.interval).await {
-                Ok(_) => {}
+                Ok(()) => {}
                 Err(e) => {
-                    eprintln!("Error while running watcher: {:?}", e);
+                    eprintln!("Error while running watcher: {e:?}");
                 }
             }
 
@@ -85,7 +87,7 @@ impl WatcherPond {
             // Wait for the interval to pass so that we don't
             // change the frequency of checks
             min_time_handle.await.unwrap_or_else(|e| {
-                eprintln!("Error while waiting for end of interval: {:?}", e);
+                eprintln!("Error while waiting for end of interval: {e:?}");
             });
         }
     }
@@ -101,7 +103,7 @@ impl WatcherPond {
 
     pub async fn shutdown(&mut self) {
         eprintln!("Pond: shutting down all handlers...");
-        for handler in self.handlers.iter() {
+        for handler in &self.handlers {
             handler.shutdown().await;
         }
     }
@@ -123,8 +125,7 @@ impl WatcherPond {
                 None => break,
             }?;
             {
-                let status_histories = &mut self.status_histories.write().await;
-                let history = &mut status_histories[id];
+                let history = &mut self.status_histories.write().await[id];
                 if history.len() == self.histsize {
                     history.remove(0);
                 }

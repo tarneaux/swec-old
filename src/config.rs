@@ -32,8 +32,8 @@ pub enum ConfigReadingError {
 impl Display for ConfigReadingError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::FileError(e) => write!(f, "Error while reading config file: {}", e),
-            Self::YamlError(e) => write!(f, "Error while parsing config file: {}", e),
+            Self::FileError(e) => write!(f, "Error while reading config file: {e}"),
+            Self::YamlError(e) => write!(f, "Error while parsing config file: {e}"),
         }
     }
 }

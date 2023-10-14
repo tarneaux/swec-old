@@ -44,12 +44,17 @@ impl HistfileHandler {
 
         let statuses = serde_json::to_string(&statuses_map).map_err(HistfileError::SerdeError)?;
 
-        let mut buf_writer = self.buf_writer.write().await;
-        buf_writer.seek(std::io::SeekFrom::Start(0)).await.unwrap();
-        buf_writer
-            .write_all(statuses.as_bytes())
-            .await
-            .map_err(HistfileError::IoError)?;
+        {
+            let mut buf_writer = self.buf_writer.write().await;
+            buf_writer
+                .seek(std::io::SeekFrom::Start(0))
+                .await
+                .map_err(HistfileError::IoError)?;
+            buf_writer
+                .write_all(statuses.as_bytes())
+                .await
+                .map_err(HistfileError::IoError)?;
+        }
         Ok(())
     }
 }
@@ -64,15 +69,19 @@ impl Handler for HistfileHandler {
         self.handle_async(statuses, watchers)
             .await
             .unwrap_or_else(|e| {
-                eprintln!("Error while writing histfile: {}", e);
-            })
+                eprintln!("Error while writing histfile: {e}");
+            });
     }
 
     async fn shutdown(&self) {
-        let mut buf_writer = self.buf_writer.write().await;
-        buf_writer.shutdown().await.unwrap_or_else(|e| {
-            eprintln!("Error while shutting down histfile handler: {}", e);
-        });
+        self.buf_writer
+            .write()
+            .await
+            .shutdown()
+            .await
+            .unwrap_or_else(|e| {
+                eprintln!("Error while shutting down histfile handler: {e}");
+            });
     }
 
     fn get_name(&self) -> &str {
@@ -121,8 +130,8 @@ pub enum HistfileError {
 impl std::fmt::Display for HistfileError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            HistfileError::IoError(e) => write!(f, "HistfileError: {}", e),
-            HistfileError::SerdeError(e) => write!(f, "HistfileError: {}", e),
+            Self::IoError(e) => write!(f, "HistfileError: {e}"),
+            Self::SerdeError(e) => write!(f, "HistfileError: {e}"),
         }
     }
 }
