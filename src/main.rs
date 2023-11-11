@@ -50,7 +50,7 @@ async fn main() {
     let mut pond = match histories {
         Ok(histories) => restore_histories_to_pond(histories, pond).await,
         Err(e) => {
-            eprintln!("Error while reading histfile: {e}");
+            eprintln!("Error while reading histfile, continuing without restoring histories: {e}");
             pond
         }
     };
