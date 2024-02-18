@@ -16,6 +16,9 @@
         pkgs.pkg-config
         pkgs-unstable.cargo
         pkgs-unstable.rustc
+        pkgs-unstable.bacon
+        pkgs-unstable.rust-analyzer
+        pkgs-unstable.rustfmt
       ];
       shellHook = ''
         export PKG_CONFIG_PATH="${pkgs.openssl.dev}/lib/pkgconfig";
