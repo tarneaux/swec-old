@@ -1,4 +1,5 @@
 use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -30,6 +31,7 @@ async fn main() -> std::io::Result<()> {
             .service(create_watcher)
             .service(get_watcher_spec)
             .service(get_watcher_statuses)
+            .service(create_watcher_status)
     })
     .bind(("127.0.0.1", 8081))?
     .run();
@@ -110,5 +112,41 @@ async fn get_watcher_statuses(
         .map_or_else(
             || HttpResponse::NotFound().body("Watcher not found"),
             |watcher| HttpResponse::Ok().json(&watcher.statuses),
+        )
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+enum SingleOrVec<T> {
+    Single(T),
+    Multiple(Vec<T>),
+}
+
+impl<T> From<SingleOrVec<T>> for Vec<T> {
+    fn from(om: SingleOrVec<T>) -> Self {
+        match om {
+            SingleOrVec::Single(t) => vec![t],
+            SingleOrVec::Multiple(ts) => ts,
+        }
+    }
+}
+
+#[post("/watchers/{name}/statuses")]
+async fn create_watcher_status(
+    app_state: web::Data<Arc<RwLock<AppState>>>,
+    name: web::Path<String>,
+    statuses: web::Json<SingleOrVec<watcher::Status>>,
+) -> impl Responder {
+    app_state
+        .write()
+        .await
+        .watchers
+        .get_mut(&name.into_inner())
+        .map_or_else(
+            || HttpResponse::NotFound().body("Watcher not found"),
+            |watcher| {
+                watcher.statuses.extend(Vec::from(statuses.into_inner()));
+                HttpResponse::Created().finish()
+            },
         )
 }
