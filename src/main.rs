@@ -55,9 +55,13 @@ impl AppState {
     }
 
     fn add_watcher(&mut self, name: String, watcher_spec: watcher::Info) -> Result<(), ()> {
-        self.watchers
-            .insert(name, watcher::Watcher::new(watcher_spec, self.history_len))
-            .map_or(Ok(()), |_| Err(()))
+        if self.watchers.contains_key(&name) {
+            return Err(());
+        } else {
+            self.watchers
+                .insert(name, watcher::Watcher::new(watcher_spec, self.history_len));
+            Ok(())
+        }
     }
 }
 
