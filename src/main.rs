@@ -28,10 +28,10 @@ async fn main() -> std::io::Result<()> {
         // private only has additional routes
         App::new()
             .app_data(web::Data::new(app_state_cloned))
-            .service(create_watcher)
             .service(get_watcher_spec)
+            .service(post_watcher_spec)
             .service(get_watcher_statuses)
-            .service(create_watcher_status)
+            .service(post_watcher_status)
     })
     .bind(("127.0.0.1", 8081))?
     .run();
@@ -84,7 +84,7 @@ async fn get_watcher_spec(
 }
 
 #[post("/watchers/{name}/spec")]
-async fn create_watcher(
+async fn post_watcher_spec(
     app_state: web::Data<Arc<RwLock<AppState>>>,
     name: web::Path<String>,
     info: web::Json<watcher::Info>,
@@ -132,7 +132,7 @@ impl<T> From<SingleOrVec<T>> for Vec<T> {
 }
 
 #[post("/watchers/{name}/statuses")]
-async fn create_watcher_status(
+async fn post_watcher_status(
     app_state: web::Data<Arc<RwLock<AppState>>>,
     name: web::Path<String>,
     statuses: web::Json<SingleOrVec<watcher::Status>>,
