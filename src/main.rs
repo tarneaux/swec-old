@@ -27,6 +27,7 @@ async fn main() -> std::io::Result<()> {
     })
     .bind(("127.0.0.1", 8081))?
     .run();
+
     tokio::select! {
         _ = public_server => {},
         _ = private_server => {},
@@ -46,55 +47,69 @@ impl AppState {
             history_len,
         }
     }
+
+    fn add_watcher(&mut self, name: String, watcher_spec: WatcherInfo) {
+        self.watchers
+            .insert(name, Watcher::new(watcher_spec, self.history_len));
+    }
 }
 
-#[get("/watcher_spec/{name}")]
+#[get("/watchers/{name}/spec")]
 async fn get_watcher_spec(
     app_state: web::Data<Arc<RwLock<AppState>>>,
     name: web::Path<String>,
 ) -> impl Responder {
-    let name = name.into_inner();
     let app_state = app_state.read().await;
-    let watcher = app_state.watchers.get(&name);
+    let watcher = app_state.watchers.get(&name.into_inner());
     match watcher {
-        Some(watcher) => HttpResponse::Ok().json(watcher.spec.clone()),
+        Some(watcher) => HttpResponse::Ok().json(watcher.info.clone()),
         None => HttpResponse::NotFound().body("Watcher not found"),
     }
 }
 
-#[post("/watcher_spec")]
+#[post("/watchers/{name}/spec")]
 async fn create_watcher(
     app_state: web::Data<Arc<RwLock<AppState>>>,
-    watcher_spec: web::Json<WatcherSpec>,
+    name: web::Path<String>,
+    info: web::Json<WatcherInfo>,
 ) -> impl Responder {
-    app_state.write().await.watchers.insert(
-        watcher_spec.name.clone(),
-        Watcher::new(watcher_spec.into_inner(), 10),
-    );
+    app_state
+        .write()
+        .await
+        .add_watcher(name.into_inner(), info.into_inner());
     HttpResponse::Created()
 }
 
 struct Watcher {
-    spec: WatcherSpec,
+    info: WatcherInfo,
+    /// History of the status of the service
     history: WatcherHistory,
 }
 
 impl Watcher {
     /// Create a new watcher with an empty history.
-    fn new(spec: WatcherSpec, hist_len: usize) -> Self {
+    fn new(info: WatcherInfo, hist_len: usize) -> Self {
         Self {
-            spec,
+            info,
             history: WatcherHistory::new(hist_len),
         }
     }
 }
 
+/// Information about a service. Only intended to be read by humans.
 #[derive(Debug, Serialize, Deserialize, Clone)]
-struct WatcherSpec {
-    /// The name of the watcher
-    name: String,
-    /// Human readable information about the watcher
-    information: String,
+struct WatcherInfo {
+    /// Description of the service
+    description: String,
+    /// URL of the service, if applicable
+    url: Option<String>,
+    // TODO: service groups with a Group struct
+}
+
+impl WatcherInfo {
+    fn new(description: String, url: Option<String>) -> Self {
+        Self { description, url }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
