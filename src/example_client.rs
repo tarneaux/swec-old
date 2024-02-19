@@ -22,6 +22,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let resp = resp.json::<Info>().await?;
     std::println!("{:?}", resp);
 
+    // Update the watcher's spec
+    let resp = client
+        .post("http://localhost:8081/watchers/test/spec")
+        .json(&Info::new(
+            "test".to_string(),
+            Some("http://localhost:8081".to_string()),
+        ))
+        .send();
+
     // Add a status to the watcher
     let resp = client
         .post("http://localhost:8081/watchers/test/statuses")

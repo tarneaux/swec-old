@@ -1,4 +1,4 @@
-use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{get, post, put, web, App, HttpResponse, HttpServer, Responder};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -97,6 +97,26 @@ async fn post_watcher_spec(
         Ok(()) => HttpResponse::Created().finish(),
         Err(()) => HttpResponse::Conflict().finish(),
     }
+}
+
+#[put("/watchers/{name}/spec")]
+async fn put_watcher_spec(
+    app_state: web::Data<Arc<RwLock<AppState>>>,
+    name: web::Path<String>,
+    info: web::Json<watcher::Info>,
+) -> impl Responder {
+    app_state
+        .write()
+        .await
+        .watchers
+        .get_mut(&name.into_inner())
+        .map_or_else(
+            || HttpResponse::NotFound().body("Watcher not found"),
+            |watcher| {
+                watcher.info = info.into_inner();
+                HttpResponse::NoContent().finish()
+            },
+        )
 }
 
 #[get("/watchers/{name}/statuses")]
