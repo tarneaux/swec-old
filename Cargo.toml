@@ -5,8 +5,21 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+# Main server
+[[bin]]
+name = "swec"
+path = "src/main.rs"
+
+
+# Example client
+[[bin]]
+name = "example-client"
+path = "src/example_client.rs"
+
+
 [dependencies]
 actix-web = "4"
 chrono = { version = "0", features = ["serde"] }
+reqwest = { version = "0.11.24", features = ["json"] }
 serde = { version = "1", features = ["derive"] }
 tokio = { version="1", features=["full"] }

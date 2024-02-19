@@ -1,10 +1,9 @@
 use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
-use chrono::{DateTime, Local};
-use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+
+mod watcher;
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
@@ -13,7 +12,10 @@ async fn main() -> std::io::Result<()> {
     let app_state_cloned = app_state.clone();
     let public_server = HttpServer::new(move || {
         let app_state_cloned = app_state_cloned.clone();
-        App::new().app_data(web::Data::new(app_state_cloned))
+        App::new()
+            .app_data(web::Data::new(app_state_cloned))
+            .service(get_watcher_spec)
+            .service(get_watcher_statuses)
     })
     .bind(("0.0.0.0", 8080))?
     .run();
@@ -21,9 +23,13 @@ async fn main() -> std::io::Result<()> {
     let app_state_cloned = app_state.clone();
     let private_server = HttpServer::new(move || {
         let app_state_cloned = app_state_cloned.clone();
+        // TODO: just add private routes to the public server's App since the
+        // private only has additional routes
         App::new()
             .app_data(web::Data::new(app_state_cloned))
             .service(create_watcher)
+            .service(get_watcher_spec)
+            .service(get_watcher_statuses)
     })
     .bind(("127.0.0.1", 8081))?
     .run();
@@ -36,7 +42,7 @@ async fn main() -> std::io::Result<()> {
 }
 
 struct AppState {
-    watchers: BTreeMap<String, Watcher>,
+    watchers: BTreeMap<String, watcher::Watcher>,
     history_len: usize,
 }
 
@@ -48,9 +54,10 @@ impl AppState {
         }
     }
 
-    fn add_watcher(&mut self, name: String, watcher_spec: WatcherInfo) {
+    fn add_watcher(&mut self, name: String, watcher_spec: watcher::Info) -> Result<(), ()> {
         self.watchers
-            .insert(name, Watcher::new(watcher_spec, self.history_len));
+            .insert(name, watcher::Watcher::new(watcher_spec, self.history_len))
+            .map_or(Ok(()), |_| Err(()))
     }
 }
 
@@ -74,63 +81,30 @@ async fn get_watcher_spec(
 async fn create_watcher(
     app_state: web::Data<Arc<RwLock<AppState>>>,
     name: web::Path<String>,
-    info: web::Json<WatcherInfo>,
+    info: web::Json<watcher::Info>,
 ) -> impl Responder {
-    app_state
+    match app_state
         .write()
         .await
-        .add_watcher(name.into_inner(), info.into_inner());
-    HttpResponse::Created()
-}
-
-struct Watcher {
-    info: WatcherInfo,
-    /// History of the status of the service
-    history: WatcherHistory,
-}
-
-impl Watcher {
-    /// Create a new watcher with an empty history.
-    fn new(info: WatcherInfo, hist_len: usize) -> Self {
-        Self {
-            info,
-            history: WatcherHistory::new(hist_len),
-        }
+        .add_watcher(name.into_inner(), info.into_inner())
+    {
+        Ok(()) => HttpResponse::Created().finish(),
+        Err(()) => HttpResponse::Conflict().finish(),
     }
 }
 
-/// Information about a service. Only intended to be read by humans.
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct WatcherInfo {
-    /// Description of the service
-    description: String,
-    /// URL of the service, if applicable
-    url: Option<String>,
-    // TODO: service groups with a Group struct
-}
-
-impl WatcherInfo {
-    const fn new(description: String, url: Option<String>) -> Self {
-        Self { description, url }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct WatcherHistory(VecDeque<Status>);
-
-impl WatcherHistory {
-    /// Create a new empty history with a given length.
-    fn new(hist_len: usize) -> Self {
-        Self(VecDeque::with_capacity(hist_len))
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct Status {
-    /// Whether the service is up or down
-    is_up: bool,
-    /// Human readable information about the status
-    message: String,
-    /// The time the status was recorded
-    time: DateTime<Local>,
+#[get("/watchers/{name}/statuses")]
+async fn get_watcher_statuses(
+    app_state: web::Data<Arc<RwLock<AppState>>>,
+    name: web::Path<String>,
+) -> impl Responder {
+    app_state
+        .read()
+        .await
+        .watchers
+        .get(&name.into_inner())
+        .map_or_else(
+            || HttpResponse::NotFound().body("Watcher not found"),
+            |watcher| HttpResponse::Ok().json(&watcher.statuses),
+        )
 }
