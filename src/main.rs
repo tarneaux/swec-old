@@ -41,7 +41,7 @@ struct AppState {
 }
 
 impl AppState {
-    fn new(history_len: usize) -> Self {
+    const fn new(history_len: usize) -> Self {
         Self {
             watchers: BTreeMap::new(),
             history_len,
@@ -59,12 +59,15 @@ async fn get_watcher_spec(
     app_state: web::Data<Arc<RwLock<AppState>>>,
     name: web::Path<String>,
 ) -> impl Responder {
-    let app_state = app_state.read().await;
-    let watcher = app_state.watchers.get(&name.into_inner());
-    match watcher {
-        Some(watcher) => HttpResponse::Ok().json(watcher.info.clone()),
-        None => HttpResponse::NotFound().body("Watcher not found"),
-    }
+    app_state
+        .read()
+        .await
+        .watchers
+        .get(&name.into_inner())
+        .map_or_else(
+            || HttpResponse::NotFound().body("Watcher not found"),
+            |watcher| HttpResponse::Ok().json(&watcher.info),
+        )
 }
 
 #[post("/watchers/{name}/spec")]
@@ -107,7 +110,7 @@ struct WatcherInfo {
 }
 
 impl WatcherInfo {
-    fn new(description: String, url: Option<String>) -> Self {
+    const fn new(description: String, url: Option<String>) -> Self {
         Self { description, url }
     }
 }
