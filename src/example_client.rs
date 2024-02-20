@@ -12,24 +12,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .json(&Info::new("test".to_string(), None))
         .send();
     let resp = resp.await?;
-    std::println!("{}", resp.status());
+    std::println!("Post spec: {}", resp.status());
+
+    // Update the watcher's spec
+    let resp = client
+        .put("http://localhost:8081/watchers/test/spec")
+        .json(&Info::new(
+            "test".to_string(),
+            Some("http://localhost:8081".to_string()),
+        ))
+        .send();
+    let resp = resp.await?;
+    std::println!("Put spec: {}", resp.status());
 
     // Get the watcher's spec
     let resp = client
         .get("http://localhost:8081/watchers/test/spec")
         .send();
     let resp = resp.await?;
-    let resp = resp.json::<Info>().await?;
-    std::println!("{:?}", resp);
-
-    // Update the watcher's spec
-    let resp = client
-        .post("http://localhost:8081/watchers/test/spec")
-        .json(&Info::new(
-            "test".to_string(),
-            Some("http://localhost:8081".to_string()),
-        ))
-        .send();
+    std::println!("Get spec: {:?}", resp.json::<Info>().await?);
 
     // Add a status to the watcher
     let resp = client
@@ -42,7 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .send();
 
     let resp = resp.await?;
-    std::println!("{}", resp.status());
+    std::println!("Post status: {}", resp.status());
 
     // Add multiple statuses to the watcher
     let resp = client
@@ -61,15 +62,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ])
         .send();
     let resp = resp.await?;
-    std::println!("{}", resp.status());
+    std::println!("Post two statuses: {}", resp.status());
 
     // Get the watcher's statuses
     let resp = client
         .get("http://localhost:8081/watchers/test/statuses")
         .send();
     let resp = resp.await?;
-    let resp = resp.json::<Vec<Status>>().await?;
-    std::println!("{:?}", resp);
+    std::println!("Get statuses: {:?}", resp.json::<Vec<Status>>().await?);
 
     Ok(())
 }
