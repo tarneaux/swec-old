@@ -30,6 +30,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(app_state_cloned))
             .service(get_watcher_spec)
             .service(post_watcher_spec)
+            .service(put_watcher_spec)
             .service(get_watcher_statuses)
             .service(post_watcher_status)
     })
