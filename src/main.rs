@@ -1,14 +1,35 @@
 use actix_web::{get, post, put, web, App, HttpResponse, HttpServer, Responder};
+use color_eyre::eyre::{eyre, Result};
 use serde::{Deserialize, Serialize};
+use serde_json;
 use std::collections::BTreeMap;
+use std::path::Path;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    sync::RwLock,
+};
 
 mod watcher;
 
 #[tokio::main]
-async fn main() -> std::io::Result<()> {
-    let app_state = Arc::new(RwLock::new(AppState::new(10)));
+async fn main() -> Result<()> {
+    // TODO: config file and/or command line arguments
+    let watchers_path = Path::new("watchers.json");
+    let history_len = 10;
+
+    eprintln!("Restoring watchers from file");
+
+    let watchers = load_watchers(watchers_path).await.unwrap_or_else(|e| {
+        eprintln!("Failed to restore watchers from file: {}", e);
+        eprintln!("Starting with an empty set of watchers");
+        BTreeMap::new()
+    });
+
+    let app_state = Arc::new(RwLock::new(AppState {
+        watchers,
+        history_len,
+    }));
 
     let app_state_cloned = app_state.clone();
     let public_server = HttpServer::new(move || {
@@ -37,6 +58,8 @@ async fn main() -> std::io::Result<()> {
     .bind(("127.0.0.1", 8081))?
     .run();
 
+    eprintln!("Starting servers");
+
     // Wait for a server to shut down or for a stop signal to be received.
     let end_message = tokio::select! {
         _ = public_server => {
@@ -50,7 +73,10 @@ async fn main() -> std::io::Result<()> {
         },
     };
 
-    println!("{}", end_message);
+    eprintln!("{}", end_message);
+
+    eprintln!("Saving watchers to file");
+    save_watchers(watchers_path, app_state.read().await.watchers.clone()).await?;
 
     Ok(())
 }
@@ -81,22 +107,30 @@ async fn wait_for_stop_signal() {
     futures::future::select_all(interrupt_futures).await;
 }
 
+async fn save_watchers(path: &Path, watchers: BTreeMap<String, watcher::Watcher>) -> Result<()> {
+    let mut file = tokio::fs::File::create(path).await?;
+    let serialized = serde_json::to_string(&watchers)?;
+    file.write_all(serialized.as_bytes()).await?;
+    Ok(())
+}
+
+async fn load_watchers(path: &Path) -> Result<BTreeMap<String, watcher::Watcher>> {
+    let mut file = tokio::fs::File::open(path).await?;
+    let mut contents = Vec::new();
+    file.read_to_end(&mut contents).await?;
+    let deserialized = serde_json::from_slice(&contents)?;
+    Ok(deserialized)
+}
+
 struct AppState {
     watchers: BTreeMap<String, watcher::Watcher>,
     history_len: usize,
 }
 
 impl AppState {
-    const fn new(history_len: usize) -> Self {
-        Self {
-            watchers: BTreeMap::new(),
-            history_len,
-        }
-    }
-
-    fn add_watcher(&mut self, name: String, watcher_spec: watcher::Info) -> Result<(), ()> {
+    fn add_watcher(&mut self, name: String, watcher_spec: watcher::Info) -> Result<()> {
         if self.watchers.contains_key(&name) {
-            return Err(());
+            return Err(eyre!("Watcher already exists"));
         } else {
             self.watchers
                 .insert(name, watcher::Watcher::new(watcher_spec, self.history_len));
@@ -133,7 +167,7 @@ async fn post_watcher_spec(
         .add_watcher(name.into_inner(), info.into_inner())
     {
         Ok(()) => HttpResponse::Created().finish(),
-        Err(()) => HttpResponse::Conflict().finish(),
+        Err(_) => HttpResponse::Conflict().finish(),
     }
 }
 

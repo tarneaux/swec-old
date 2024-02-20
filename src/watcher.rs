@@ -2,6 +2,7 @@ use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct Watcher {
     /// Information about the service, for humans
     pub info: Info,
