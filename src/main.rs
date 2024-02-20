@@ -36,11 +36,48 @@ async fn main() -> std::io::Result<()> {
     .bind(("127.0.0.1", 8081))?
     .run();
 
-    tokio::select! {
-        _ = public_server => {},
-        _ = private_server => {},
-    }
+    // Wait for a server to shut down or for a stop signal to be received.
+    let end_message = tokio::select! {
+        _ = public_server => {
+            "Public server shut down, shutting down private server"
+        },
+        _ = private_server => {
+            "Private server shut down, shutting down public server"
+        },
+        _ = wait_for_stop_signal() => {
+            "Interrupt received, shutting down servers"
+        },
+    };
+
+    println!("{}", end_message);
+
     Ok(())
+}
+
+/// Wait for a stop signal to be received.
+async fn wait_for_stop_signal() {
+    use tokio::signal::unix::{signal, SignalKind};
+    let interrupt_signal_kinds = vec![
+        SignalKind::alarm(),
+        SignalKind::hangup(),
+        SignalKind::interrupt(),
+        SignalKind::pipe(),
+        SignalKind::quit(),
+        SignalKind::terminate(),
+    ];
+    let interrupt_futures = interrupt_signal_kinds
+        .into_iter()
+        .map(|kind| async move {
+            // Because recv borrows the signal, we need to make a new future:
+            // this allows keeping ownership of the signal until the future is
+            // dropped, instead of dropping early in the map, when recv is
+            // called (which would not work).
+            signal(kind).expect("Failed to create signal").recv().await;
+        })
+        .map(|future| Box::pin(future))
+        .collect::<Vec<_>>();
+
+    futures::future::select_all(interrupt_futures).await;
 }
 
 struct AppState {
