@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub(crate) struct Watcher {
+pub struct Watcher {
     /// Information about the service, for humans
     pub info: Info,
     /// Status history of the service
@@ -11,6 +11,7 @@ pub(crate) struct Watcher {
 }
 
 impl Watcher {
+    #[must_use]
     /// Create a new watcher with an empty history.
     pub fn new(info: Info, hist_len: usize) -> Self {
         Self {
@@ -24,9 +25,9 @@ impl Watcher {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Info {
     /// Description of the service
-    description: String,
+    pub description: String,
     /// URL of the service, if applicable
-    url: Option<String>,
+    pub url: Option<String>,
     // TODO: service groups with a Group struct
 }
 

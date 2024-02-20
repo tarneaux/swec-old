@@ -10,7 +10,7 @@ use tokio::{
 };
 
 mod api;
-mod watcher;
+use swec::watcher;
 
 #[tokio::main]
 async fn main() -> Result<()> {
