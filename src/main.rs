@@ -17,14 +17,17 @@ async fn main() -> Result<()> {
     // TODO: config file and/or command line arguments
     let watchers_path = Path::new("watchers.json");
     let history_len = 10;
+    let truncate_histories = false;
 
     eprintln!("Restoring watchers from file");
 
-    let watchers = load_watchers(watchers_path).await.unwrap_or_else(|e| {
-        eprintln!("Failed to restore watchers from file: {}", e);
-        eprintln!("Starting with an empty set of watchers");
-        BTreeMap::new()
-    });
+    let watchers = load_watchers(watchers_path, history_len, truncate_histories)
+        .await
+        .unwrap_or_else(|e| {
+            eprintln!("Failed to restore watchers from file: {}", e);
+            eprintln!("Starting with an empty set of watchers");
+            BTreeMap::new()
+        });
 
     let app_state = Arc::new(RwLock::new(api::AppState {
         watchers,
@@ -114,10 +117,25 @@ async fn save_watchers(path: &Path, watchers: BTreeMap<String, watcher::Watcher>
     Ok(())
 }
 
-async fn load_watchers(path: &Path) -> Result<BTreeMap<String, watcher::Watcher>> {
+async fn load_watchers(
+    path: &Path,
+    history_length: usize,
+    truncate: bool,
+) -> Result<BTreeMap<String, watcher::Watcher>> {
     let mut file = tokio::fs::File::open(path).await?;
     let mut contents = Vec::new();
     file.read_to_end(&mut contents).await?;
-    let deserialized = serde_json::from_slice(&contents)?;
+    let mut deserialized: BTreeMap<String, watcher::Watcher> = serde_json::from_slice(&contents)?;
+    // Make sure the histories are all the correct length
+    for watcher in deserialized.values_mut() {
+        if truncate {
+            watcher.statuses.truncate_fifo(history_length);
+        } else {
+            watcher
+                .statuses
+                .resize(history_length)
+                .expect("Failed to resize watcher history");
+        }
+    }
     Ok(deserialized)
 }

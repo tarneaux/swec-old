@@ -1,13 +1,16 @@
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
+
+mod ringbuffer;
+
+pub use ringbuffer::RingBuffer;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Watcher {
     /// Information about the service, for humans
     pub info: Info,
     /// Status history of the service
-    pub statuses: VecDeque<Status>,
+    pub statuses: RingBuffer<Status>,
 }
 
 impl Watcher {
@@ -16,7 +19,7 @@ impl Watcher {
     pub fn new(info: Info, hist_len: usize) -> Self {
         Self {
             info,
-            statuses: VecDeque::with_capacity(hist_len),
+            statuses: RingBuffer::new(hist_len),
         }
     }
 }

@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::watcher;
+use swec::watcher;
 
 pub struct AppState {
     pub watchers: BTreeMap<String, watcher::Watcher>,
@@ -122,7 +122,9 @@ pub async fn post_watcher_status(
         .map_or_else(
             || HttpResponse::NotFound().body("Watcher not found"),
             |watcher| {
-                watcher.statuses.extend(Vec::from(statuses.into_inner()));
+                watcher
+                    .statuses
+                    .push_multiple(Vec::from(statuses.into_inner()));
                 HttpResponse::Created().finish()
             },
         )
