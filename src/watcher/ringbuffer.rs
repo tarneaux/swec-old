@@ -201,6 +201,7 @@ mod tests {
         let rb = RingBuffer::<i32>::new(5);
         assert_eq!(rb.capacity(), 5);
         assert_eq!(rb.len(), 0);
+        assert!(rb.is_empty());
     }
 
     #[test]
@@ -219,6 +220,7 @@ mod tests {
         assert_eq!(rb.iter().copied().collect::<Vec<_>>(), vec![6, 7, 8, 9, 10]);
         assert_eq!(rb.capacity(), 5);
         assert_eq!(rb.len(), 5);
+        assert!(!rb.is_empty());
     }
 
     #[test]
