@@ -1,11 +1,33 @@
-use actix_web::{get, post, put, web, HttpResponse, Responder};
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+    routing::{get, post, put},
+    Json,
+};
 use color_eyre::eyre::{eyre, Result};
-use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use swec::watcher;
+
+// The read-only API.
+pub fn read_only_router() -> axum::Router<Arc<RwLock<AppState>>> {
+    axum::Router::new()
+        .route("/watchers", get(get_watchers))
+        .route("/watchers/:name", get(get_watcher))
+        .route("/watchers/:name/spec", get(get_watcher_spec))
+        .route("/watchers/:name/statuses", get(get_watcher_statuses))
+        .route("/watchers/:name/statuses/:index", get(get_watcher_status))
+}
+
+// The read-write API.
+pub fn read_write_router() -> axum::Router<Arc<RwLock<AppState>>> {
+    read_only_router()
+        .route("/watchers/:name/spec", post(post_watcher_spec))
+        .route("/watchers/:name/spec", put(put_watcher_spec))
+        .route("/watchers/:name/statuses", post(post_watcher_status))
+}
 
 pub struct AppState {
     pub watchers: BTreeMap<String, watcher::Watcher>,
@@ -23,128 +45,102 @@ impl AppState {
     }
 }
 
-#[get("/watchers")]
-pub async fn get_watchers(app_state: web::Data<Arc<RwLock<AppState>>>) -> impl Responder {
+pub async fn get_watchers(
+    State(app_state): State<Arc<RwLock<AppState>>>,
+) -> (StatusCode, Json<BTreeMap<String, watcher::Watcher>>) {
     let watchers = &app_state.read().await.watchers;
-    HttpResponse::Ok().json(watchers)
+    (StatusCode::OK, Json(watchers.clone()))
 }
 
-#[get("/watchers/{name}")]
 pub async fn get_watcher(
-    app_state: web::Data<Arc<RwLock<AppState>>>,
-    path: web::Path<String>,
-) -> impl Responder {
-    let name = path.into_inner();
+    State(app_state): State<Arc<RwLock<AppState>>>,
+    Path(name): Path<String>,
+) -> (StatusCode, Json<Option<watcher::Watcher>>) {
     app_state.read().await.watchers.get(&name).map_or_else(
-        || HttpResponse::NotFound().body("Watcher not found"),
-        |watcher| HttpResponse::Ok().json(watcher),
+        || (StatusCode::NOT_FOUND, Json(None)),
+        |watcher| (StatusCode::OK, Json(Some(watcher.clone()))),
     )
 }
 
-#[get("/watchers/{name}/spec")]
 pub async fn get_watcher_spec(
-    app_state: web::Data<Arc<RwLock<AppState>>>,
-    path: web::Path<String>,
-) -> impl Responder {
-    let name = path.into_inner();
+    State(app_state): State<Arc<RwLock<AppState>>>,
+    Path(name): Path<String>,
+) -> (StatusCode, Json<Option<watcher::Spec>>) {
     app_state.read().await.watchers.get(&name).map_or_else(
-        || HttpResponse::NotFound().body("Watcher not found"),
-        |watcher| HttpResponse::Ok().json(&watcher.spec),
+        || (StatusCode::NOT_FOUND, Json(None)),
+        |watcher| (StatusCode::OK, Json(Some(watcher.spec.clone()))),
     )
 }
 
-#[post("/watchers/{name}/spec")]
 pub async fn post_watcher_spec(
-    app_state: web::Data<Arc<RwLock<AppState>>>,
-    path: web::Path<String>,
-    spec: web::Json<watcher::Spec>,
-) -> impl Responder {
-    let name = path.into_inner();
+    State(app_state): State<Arc<RwLock<AppState>>>,
+    Path(name): Path<String>,
+    Json(spec): Json<watcher::Spec>,
+) -> (StatusCode, Json<Option<watcher::Spec>>) {
     app_state
         .write()
         .await
-        .add_watcher(name, spec.into_inner())
+        .add_watcher(name, spec.clone())
         .map_or_else(
-            |_| HttpResponse::Conflict().finish(),
-            |()| HttpResponse::Created().finish(),
+            |_| (StatusCode::CONFLICT, Json(None)),
+            |()| (StatusCode::CREATED, Json(Some(spec))),
         )
 }
 
-#[put("/watchers/{name}/spec")]
 pub async fn put_watcher_spec(
-    app_state: web::Data<Arc<RwLock<AppState>>>,
-    path: web::Path<String>,
-    spec: web::Json<watcher::Spec>,
-) -> impl Responder {
-    let name = path.into_inner();
+    State(app_state): State<Arc<RwLock<AppState>>>,
+    Path(name): Path<String>,
+    Json(spec): Json<watcher::Spec>,
+) -> (StatusCode, Json<Option<watcher::Spec>>) {
     app_state.write().await.watchers.get_mut(&name).map_or_else(
-        || HttpResponse::NotFound().body("Watcher not found"),
+        || (StatusCode::NOT_FOUND, Json(None)),
         |watcher| {
-            watcher.spec = spec.into_inner();
-            HttpResponse::NoContent().finish()
+            watcher.spec = spec;
+            (StatusCode::OK, Json(Some(watcher.spec.clone())))
         },
     )
 }
 
-#[get("/watchers/{name}/statuses")]
 pub async fn get_watcher_statuses(
-    app_state: web::Data<Arc<RwLock<AppState>>>,
-    path: web::Path<String>,
-) -> impl Responder {
-    let name = path.into_inner();
+    State(app_state): State<Arc<RwLock<AppState>>>,
+    Path(name): Path<String>,
+) -> (StatusCode, Json<Option<Vec<watcher::Status>>>) {
     app_state.read().await.watchers.get(&name).map_or_else(
-        || HttpResponse::NotFound().body("Watcher not found"),
-        |watcher| HttpResponse::Ok().json(&watcher.statuses),
-    )
-}
-
-#[get("/watchers/{name}/statuses/{index}")]
-pub async fn get_watcher_status(
-    app_state: web::Data<Arc<RwLock<AppState>>>,
-    path: web::Path<(String, usize)>,
-) -> impl Responder {
-    let (name, index) = path.into_inner();
-    app_state.read().await.watchers.get(&name).map_or_else(
-        || HttpResponse::NotFound().body("Watcher not found"),
+        || (StatusCode::NOT_FOUND, Json(None)),
         |watcher| {
-            watcher.statuses.iter().rev().nth(index).map_or_else(
-                || HttpResponse::NotFound().body("Status not found"),
-                |status| HttpResponse::Ok().json(status),
+            (
+                StatusCode::OK,
+                Json(Some(watcher.statuses.clone().collect())),
             )
         },
     )
 }
 
-#[derive(Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum SingleOrVec<T> {
-    Single(T),
-    Multiple(Vec<T>),
-}
-
-impl<T> From<SingleOrVec<T>> for Vec<T> {
-    fn from(om: SingleOrVec<T>) -> Self {
-        match om {
-            SingleOrVec::Single(t) => vec![t],
-            SingleOrVec::Multiple(ts) => ts,
-        }
-    }
-}
-
-#[post("/watchers/{name}/statuses")]
-pub async fn post_watcher_status(
-    app_state: web::Data<Arc<RwLock<AppState>>>,
-    path: web::Path<String>,
-    statuses: web::Json<SingleOrVec<watcher::Status>>,
-) -> impl Responder {
-    let name = path.into_inner();
-    app_state.write().await.watchers.get_mut(&name).map_or_else(
-        || HttpResponse::NotFound().body("Watcher not found"),
+pub async fn get_watcher_status(
+    State(app_state): State<Arc<RwLock<AppState>>>,
+    Path((name, index)): Path<(String, usize)>,
+) -> (StatusCode, Json<Option<watcher::Status>>) {
+    app_state.read().await.watchers.get(&name).map_or_else(
+        || (StatusCode::NOT_FOUND, Json(None)),
         |watcher| {
-            watcher
-                .statuses
-                .push_multiple(Vec::from(statuses.into_inner()));
-            HttpResponse::Created().finish()
+            watcher.statuses.iter().rev().nth(index).map_or_else(
+                || (StatusCode::NOT_FOUND, Json(None)),
+                |status| (StatusCode::OK, Json(Some(status.clone()))),
+            )
+        },
+    )
+}
+
+pub async fn post_watcher_status(
+    State(app_state): State<Arc<RwLock<AppState>>>,
+    Path(name): Path<String>,
+    Json(status): Json<watcher::Status>,
+) -> (StatusCode, Json<Option<watcher::Status>>) {
+    app_state.write().await.watchers.get_mut(&name).map_or_else(
+        || (StatusCode::NOT_FOUND, Json(None)),
+        |watcher| {
+            watcher.statuses.push(status.clone());
+            (StatusCode::CREATED, Json(Some(status)))
         },
     )
 }

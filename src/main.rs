@@ -1,6 +1,7 @@
-use actix_web::{web, App, HttpServer};
+use axum::Router;
 use color_eyre::eyre::Result;
 use std::collections::BTreeMap;
+use std::future::IntoFuture;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::{
@@ -33,38 +34,21 @@ async fn main() -> Result<()> {
         history_len,
     }));
 
-    let app_state_cloned = app_state.clone();
-    let public_server = HttpServer::new(move || {
-        let app_state_cloned = app_state_cloned.clone();
-        App::new()
-            .app_data(web::Data::new(app_state_cloned))
-            .service(api::get_watchers)
-            .service(api::get_watcher)
-            .service(api::get_watcher_spec)
-            .service(api::get_watcher_status)
-            .service(api::get_watcher_statuses)
-    })
-    .bind(("0.0.0.0", 8080))?
-    .run();
+    let public_router = Router::new()
+        .nest("/api/v1", api::read_only_router())
+        .with_state(app_state.clone());
 
-    let app_state_cloned = app_state.clone();
-    let private_server = HttpServer::new(move || {
-        let app_state_cloned = app_state_cloned.clone();
-        // TODO: just add private routes to the public server's App since the
-        // private only has additional routes
-        App::new()
-            .app_data(web::Data::new(app_state_cloned))
-            .service(api::get_watchers)
-            .service(api::get_watcher)
-            .service(api::get_watcher_spec)
-            .service(api::post_watcher_spec)
-            .service(api::put_watcher_spec)
-            .service(api::get_watcher_status)
-            .service(api::get_watcher_statuses)
-            .service(api::post_watcher_status)
-    })
-    .bind(("127.0.0.1", 8081))?
-    .run();
+    let private_router = Router::new()
+        .nest("/api/v1", api::read_write_router())
+        .with_state(app_state.clone());
+
+    let public_listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
+    let private_listener = tokio::net::TcpListener::bind("127.0.0.1:8081").await?;
+
+    let public_server =
+        axum::serve(public_listener, public_router.into_make_service()).into_future();
+    let private_server =
+        axum::serve(private_listener, private_router.into_make_service()).into_future();
 
     eprintln!("Starting servers");
 
