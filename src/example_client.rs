@@ -71,5 +71,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let resp = resp.await?;
     std::println!("Get statuses: {:?}", resp.json::<Vec<Status>>().await?);
 
+    // Get a specific status
+    let resp = client
+        .get("http://localhost:8081/watchers/test/statuses/0")
+        .send();
+    let resp = resp.await?;
+    std::println!("Get status: {:?}", resp.json::<Status>().await?);
+
     Ok(())
 }

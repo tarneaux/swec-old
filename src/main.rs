@@ -40,6 +40,7 @@ async fn main() -> Result<()> {
         App::new()
             .app_data(web::Data::new(app_state_cloned))
             .service(api::get_watcher_spec)
+            .service(api::get_watcher_status)
             .service(api::get_watcher_statuses)
     })
     .bind(("0.0.0.0", 8080))?
@@ -55,6 +56,7 @@ async fn main() -> Result<()> {
             .service(api::get_watcher_spec)
             .service(api::post_watcher_spec)
             .service(api::put_watcher_spec)
+            .service(api::get_watcher_status)
             .service(api::get_watcher_statuses)
             .service(api::post_watcher_status)
     })

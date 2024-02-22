@@ -77,6 +77,23 @@ pub async fn get_watcher_statuses(
     )
 }
 
+#[get("/watchers/{name}/statuses/{index}")]
+pub async fn get_watcher_status(
+    app_state: web::Data<Arc<RwLock<AppState>>>,
+    path: web::Path<(String, usize)>,
+) -> impl Responder {
+    let (name, index) = path.into_inner();
+    app_state.read().await.watchers.get(&name).map_or_else(
+        || HttpResponse::NotFound().body("Watcher not found"),
+        |watcher| {
+            watcher.statuses.iter().rev().nth(index).map_or_else(
+                || HttpResponse::NotFound().body("Status not found"),
+                |status| HttpResponse::Ok().json(status),
+            )
+        },
+    )
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum SingleOrVec<T> {
