@@ -19,6 +19,7 @@
         pkgs-unstable.bacon
         pkgs-unstable.rust-analyzer
         pkgs-unstable.rustfmt
+        pkgs-unstable.clippy
       ];
       shellHook = ''
         export PKG_CONFIG_PATH="${pkgs.openssl.dev}/lib/pkgconfig";
