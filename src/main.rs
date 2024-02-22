@@ -38,6 +38,8 @@ async fn main() -> Result<()> {
         let app_state_cloned = app_state_cloned.clone();
         App::new()
             .app_data(web::Data::new(app_state_cloned))
+            .service(api::get_watchers)
+            .service(api::get_watcher)
             .service(api::get_watcher_spec)
             .service(api::get_watcher_status)
             .service(api::get_watcher_statuses)
@@ -52,6 +54,8 @@ async fn main() -> Result<()> {
         // private only has additional routes
         App::new()
             .app_data(web::Data::new(app_state_cloned))
+            .service(api::get_watchers)
+            .service(api::get_watcher)
             .service(api::get_watcher_spec)
             .service(api::post_watcher_spec)
             .service(api::put_watcher_spec)

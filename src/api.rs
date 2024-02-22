@@ -13,7 +13,7 @@ pub struct AppState {
 }
 
 impl AppState {
-    fn add_watcher(&mut self, name: String, watcher_spec: watcher::Info) -> Result<()> {
+    fn add_watcher(&mut self, name: String, watcher_spec: watcher::Spec) -> Result<()> {
         if self.watchers.contains_key(&name) {
             return Err(eyre!("Watcher already exists"));
         }
@@ -21,6 +21,24 @@ impl AppState {
             .insert(name, watcher::Watcher::new(watcher_spec, self.history_len));
         Ok(())
     }
+}
+
+#[get("/watchers")]
+pub async fn get_watchers(app_state: web::Data<Arc<RwLock<AppState>>>) -> impl Responder {
+    let watchers = &app_state.read().await.watchers;
+    HttpResponse::Ok().json(watchers)
+}
+
+#[get("/watchers/{name}")]
+pub async fn get_watcher(
+    app_state: web::Data<Arc<RwLock<AppState>>>,
+    path: web::Path<String>,
+) -> impl Responder {
+    let name = path.into_inner();
+    app_state.read().await.watchers.get(&name).map_or_else(
+        || HttpResponse::NotFound().body("Watcher not found"),
+        |watcher| HttpResponse::Ok().json(watcher),
+    )
 }
 
 #[get("/watchers/{name}/spec")]
@@ -31,7 +49,7 @@ pub async fn get_watcher_spec(
     let name = path.into_inner();
     app_state.read().await.watchers.get(&name).map_or_else(
         || HttpResponse::NotFound().body("Watcher not found"),
-        |watcher| HttpResponse::Ok().json(&watcher.info),
+        |watcher| HttpResponse::Ok().json(&watcher.spec),
     )
 }
 
@@ -39,13 +57,13 @@ pub async fn get_watcher_spec(
 pub async fn post_watcher_spec(
     app_state: web::Data<Arc<RwLock<AppState>>>,
     path: web::Path<String>,
-    info: web::Json<watcher::Info>,
+    spec: web::Json<watcher::Spec>,
 ) -> impl Responder {
     let name = path.into_inner();
     app_state
         .write()
         .await
-        .add_watcher(name, info.into_inner())
+        .add_watcher(name, spec.into_inner())
         .map_or_else(
             |_| HttpResponse::Conflict().finish(),
             |()| HttpResponse::Created().finish(),
@@ -56,13 +74,13 @@ pub async fn post_watcher_spec(
 pub async fn put_watcher_spec(
     app_state: web::Data<Arc<RwLock<AppState>>>,
     path: web::Path<String>,
-    info: web::Json<watcher::Info>,
+    spec: web::Json<watcher::Spec>,
 ) -> impl Responder {
     let name = path.into_inner();
     app_state.write().await.watchers.get_mut(&name).map_or_else(
         || HttpResponse::NotFound().body("Watcher not found"),
         |watcher| {
-            watcher.info = info.into_inner();
+            watcher.spec = spec.into_inner();
             HttpResponse::NoContent().finish()
         },
     )

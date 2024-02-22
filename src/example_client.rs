@@ -1,5 +1,5 @@
 use reqwest::Client;
-use swec::watcher::{Info, Status};
+use swec::watcher::{Spec, Status};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -9,7 +9,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create a new watcher with a description and no URL
     let resp = client
         .post("http://localhost:8081/watchers/test/spec")
-        .json(&Info::new("test".to_string(), None))
+        .json(&Spec::new("test".to_string(), None))
         .send();
     let resp = resp.await?;
     std::println!("Post spec: {}", resp.status());
@@ -17,7 +17,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Update the watcher's spec
     let resp = client
         .put("http://localhost:8081/watchers/test/spec")
-        .json(&Info::new(
+        .json(&Spec::new(
             "test".to_string(),
             Some("http://localhost:8081".to_string()),
         ))
@@ -30,7 +30,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .get("http://localhost:8081/watchers/test/spec")
         .send();
     let resp = resp.await?;
-    std::println!("Get spec: {:?}", resp.json::<Info>().await?);
+    std::println!("Get spec: {:?}", resp.json::<Spec>().await?);
 
     // Add a status to the watcher
     let resp = client
