@@ -4,6 +4,7 @@ use axum::{
     routing::{get, post, put},
     Json,
 };
+use chrono::{DateTime, Local};
 use color_eyre::eyre::{eyre, Result};
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -104,7 +105,10 @@ pub async fn put_watcher_spec(
 pub async fn get_watcher_statuses(
     State(app_state): State<Arc<RwLock<AppState>>>,
     Path(name): Path<String>,
-) -> (StatusCode, Json<Option<Vec<watcher::Status>>>) {
+) -> (
+    StatusCode,
+    Json<Option<Vec<(DateTime<Local>, watcher::Status)>>>,
+) {
     app_state.read().await.watchers.get(&name).map_or_else(
         || (StatusCode::NOT_FOUND, Json(None)),
         |watcher| {
@@ -119,7 +123,7 @@ pub async fn get_watcher_statuses(
 pub async fn get_watcher_status(
     State(app_state): State<Arc<RwLock<AppState>>>,
     Path((name, index)): Path<(String, usize)>,
-) -> (StatusCode, Json<Option<watcher::Status>>) {
+) -> (StatusCode, Json<Option<(DateTime<Local>, watcher::Status)>>) {
     app_state.read().await.watchers.get(&name).map_or_else(
         || (StatusCode::NOT_FOUND, Json(None)),
         |watcher| {
@@ -136,10 +140,11 @@ pub async fn post_watcher_status(
     Path(name): Path<String>,
     Json(status): Json<watcher::Status>,
 ) -> (StatusCode, Json<Option<watcher::Status>>) {
+    let time = Local::now();
     app_state.write().await.watchers.get_mut(&name).map_or_else(
         || (StatusCode::NOT_FOUND, Json(None)),
         |watcher| {
-            watcher.statuses.push(status.clone());
+            watcher.statuses.push((time, status.clone()));
             (StatusCode::CREATED, Json(Some(status)))
         },
     )

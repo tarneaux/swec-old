@@ -10,7 +10,7 @@ pub struct Watcher {
     /// Information about the service, for humans
     pub spec: Spec,
     /// Status history of the service
-    pub statuses: RingBuffer<Status>,
+    pub statuses: RingBuffer<(DateTime<Local>, Status)>,
 }
 
 impl Watcher {
@@ -47,6 +47,4 @@ pub struct Status {
     pub is_up: bool,
     /// Human readable information about the status
     pub message: String,
-    /// The time the status was recorded
-    pub time: DateTime<Local>,
 }

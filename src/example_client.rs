@@ -21,7 +21,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let status = Status {
         is_up: true,
         message: "Everything is fine".to_string(),
-        time: chrono::Local::now(),
     };
     let r = client
         .post(&format!("{api_url}/watchers/test/statuses"))
