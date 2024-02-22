@@ -1,6 +1,6 @@
-use color_eyre::eyre::{eyre, Result};
+use core::fmt::{self, Debug, Formatter};
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
+use std::{cmp::Ordering, collections::VecDeque};
 
 /// A fixed length ring buffer that overwrites the oldest element when full.
 #[derive(Clone, Debug)]
@@ -19,6 +19,7 @@ impl<T> RingBuffer<T> {
     /// let rb = RingBuffer::<i32>::new(5);
     /// assert_eq!(rb.capacity(), 5);
     /// ```
+    #[must_use]
     pub fn new(capacity: usize) -> Self {
         Self {
             inner: VecDeque::with_capacity(capacity),
@@ -57,6 +58,7 @@ impl<T> RingBuffer<T> {
     }
 
     /// Get an iterator over the elements in the ring buffer.
+    /// The first element is the oldest, and the last element is the newest.
     /// # Example
     /// ```
     /// # use swec::watcher::RingBuffer;
@@ -65,18 +67,27 @@ impl<T> RingBuffer<T> {
     /// let iter = rb.iter();
     /// assert_eq!(iter.copied().collect::<Vec<_>>(), vec![8, 9, 10]);
     /// ```
+    #[must_use]
     pub fn iter(&self) -> std::collections::vec_deque::Iter<T> {
         self.inner.iter()
     }
 
     /// Get the capacity of the ring buffer.
-    pub fn capacity(&self) -> usize {
+    #[must_use]
+    pub const fn capacity(&self) -> usize {
         self.capacity
     }
 
     /// Get the length of the ring buffer.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.inner.len()
+    }
+
+    /// Check if the ring buffer is empty.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
     }
 
     /// Dynamically increase the capacity of the ring buffer.
@@ -91,11 +102,14 @@ impl<T> RingBuffer<T> {
     /// rb.push_multiple(1..=10);
     /// assert_eq!(rb.iter().copied().collect::<Vec<_>>(), vec![6, 7, 8, 9, 10]);
     /// ```
-    pub fn resize(&mut self, capacity: usize) -> Result<()> {
+    /// # Errors
+    /// Returns a `ResizeError` if the new capacity is less than the current length of the buffer.
+    pub fn resize(&mut self, capacity: usize) -> Result<(), ResizeError> {
         if capacity < self.capacity {
-            Err(eyre!(
-                "New capacity is less than the current length of the buffer."
-            ))
+            Err(ResizeError {
+                new_capacity: capacity,
+                length: self.inner.len(),
+            })
         } else {
             self.inner.reserve(capacity - self.capacity);
             self.capacity = capacity;
@@ -116,13 +130,17 @@ impl<T> RingBuffer<T> {
     /// assert_eq!(rb.iter().copied().collect::<Vec<_>>(), vec![8, 9, 10]);
     /// ```
     pub fn truncate_fifo(&mut self, capacity: usize) {
-        if capacity < self.capacity {
-            while self.inner.len() > capacity {
-                self.inner.pop_front();
+        match capacity.cmp(&self.capacity) {
+            Ordering::Less => {
+                while self.inner.len() > capacity {
+                    self.inner.pop_front();
+                }
+                self.inner.shrink_to_fit();
             }
-            self.inner.shrink_to_fit();
-        } else if capacity > self.capacity {
-            self.inner.reserve(capacity - self.capacity);
+            Ordering::Greater => {
+                self.inner.reserve(capacity - self.capacity);
+            }
+            Ordering::Equal => {}
         }
         self.capacity = capacity;
     }
@@ -148,7 +166,7 @@ where
     where
         D: serde::Deserializer<'de>,
     {
-        VecDeque::deserialize(deserializer).map(RingBuffer::from)
+        VecDeque::deserialize(deserializer).map(Self::from)
     }
 }
 
@@ -156,6 +174,21 @@ impl<T> From<VecDeque<T>> for RingBuffer<T> {
     fn from(inner: VecDeque<T>) -> Self {
         let capacity = inner.len(); // Not capacity: it may be more than length
         Self { inner, capacity }
+    }
+}
+
+pub struct ResizeError {
+    new_capacity: usize,
+    length: usize,
+}
+
+impl Debug for ResizeError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "New capacity ({}) is less than the current length of the buffer ({}).",
+            self.new_capacity, self.length
+        )
     }
 }
 

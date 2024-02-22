@@ -1,6 +1,5 @@
 use actix_web::{web, App, HttpServer};
 use color_eyre::eyre::Result;
-use serde_json;
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -24,7 +23,7 @@ async fn main() -> Result<()> {
     let watchers = load_watchers(watchers_path, history_len, truncate_histories)
         .await
         .unwrap_or_else(|e| {
-            eprintln!("Failed to restore watchers from file: {}", e);
+            eprintln!("Failed to restore watchers from file: {e}");
             eprintln!("Starting with an empty set of watchers");
             BTreeMap::new()
         });
@@ -73,12 +72,12 @@ async fn main() -> Result<()> {
         _ = private_server => {
             "Private server shut down, shutting down public server"
         },
-        _ = wait_for_stop_signal() => {
+        () = wait_for_stop_signal() => {
             "Interrupt received, shutting down servers"
         },
     };
 
-    eprintln!("{}", end_message);
+    eprintln!("{end_message}");
 
     eprintln!("Saving watchers to file");
     save_watchers(watchers_path, app_state.read().await.watchers.clone()).await?;
@@ -106,7 +105,7 @@ async fn wait_for_stop_signal() {
             // called (which would not work).
             signal(kind).expect("Failed to create signal").recv().await;
         })
-        .map(|future| Box::pin(future))
+        .map(Box::pin)
         .collect::<Vec<_>>();
 
     futures::future::select_all(interrupt_futures).await;

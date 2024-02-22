@@ -16,11 +16,10 @@ impl AppState {
     fn add_watcher(&mut self, name: String, watcher_spec: watcher::Info) -> Result<()> {
         if self.watchers.contains_key(&name) {
             return Err(eyre!("Watcher already exists"));
-        } else {
-            self.watchers
-                .insert(name, watcher::Watcher::new(watcher_spec, self.history_len));
-            Ok(())
         }
+        self.watchers
+            .insert(name, watcher::Watcher::new(watcher_spec, self.history_len));
+        Ok(())
     }
 }
 
@@ -43,10 +42,14 @@ pub async fn post_watcher_spec(
     info: web::Json<watcher::Info>,
 ) -> impl Responder {
     let name = path.into_inner();
-    match app_state.write().await.add_watcher(name, info.into_inner()) {
-        Ok(()) => HttpResponse::Created().finish(),
-        Err(_) => HttpResponse::Conflict().finish(),
-    }
+    app_state
+        .write()
+        .await
+        .add_watcher(name, info.into_inner())
+        .map_or_else(
+            |_| HttpResponse::Conflict().finish(),
+            |()| HttpResponse::Created().finish(),
+        )
 }
 
 #[put("/watchers/{name}/spec")]
