@@ -27,30 +27,23 @@ impl AppState {
 #[get("/watchers/{name}/spec")]
 pub async fn get_watcher_spec(
     app_state: web::Data<Arc<RwLock<AppState>>>,
-    name: web::Path<String>,
+    path: web::Path<String>,
 ) -> impl Responder {
-    app_state
-        .read()
-        .await
-        .watchers
-        .get(&name.into_inner())
-        .map_or_else(
-            || HttpResponse::NotFound().body("Watcher not found"),
-            |watcher| HttpResponse::Ok().json(&watcher.info),
-        )
+    let name = path.into_inner();
+    app_state.read().await.watchers.get(&name).map_or_else(
+        || HttpResponse::NotFound().body("Watcher not found"),
+        |watcher| HttpResponse::Ok().json(&watcher.info),
+    )
 }
 
 #[post("/watchers/{name}/spec")]
 pub async fn post_watcher_spec(
     app_state: web::Data<Arc<RwLock<AppState>>>,
-    name: web::Path<String>,
+    path: web::Path<String>,
     info: web::Json<watcher::Info>,
 ) -> impl Responder {
-    match app_state
-        .write()
-        .await
-        .add_watcher(name.into_inner(), info.into_inner())
-    {
+    let name = path.into_inner();
+    match app_state.write().await.add_watcher(name, info.into_inner()) {
         Ok(()) => HttpResponse::Created().finish(),
         Err(_) => HttpResponse::Conflict().finish(),
     }
@@ -59,37 +52,29 @@ pub async fn post_watcher_spec(
 #[put("/watchers/{name}/spec")]
 pub async fn put_watcher_spec(
     app_state: web::Data<Arc<RwLock<AppState>>>,
-    name: web::Path<String>,
+    path: web::Path<String>,
     info: web::Json<watcher::Info>,
 ) -> impl Responder {
-    app_state
-        .write()
-        .await
-        .watchers
-        .get_mut(&name.into_inner())
-        .map_or_else(
-            || HttpResponse::NotFound().body("Watcher not found"),
-            |watcher| {
-                watcher.info = info.into_inner();
-                HttpResponse::NoContent().finish()
-            },
-        )
+    let name = path.into_inner();
+    app_state.write().await.watchers.get_mut(&name).map_or_else(
+        || HttpResponse::NotFound().body("Watcher not found"),
+        |watcher| {
+            watcher.info = info.into_inner();
+            HttpResponse::NoContent().finish()
+        },
+    )
 }
 
 #[get("/watchers/{name}/statuses")]
 pub async fn get_watcher_statuses(
     app_state: web::Data<Arc<RwLock<AppState>>>,
-    name: web::Path<String>,
+    path: web::Path<String>,
 ) -> impl Responder {
-    app_state
-        .read()
-        .await
-        .watchers
-        .get(&name.into_inner())
-        .map_or_else(
-            || HttpResponse::NotFound().body("Watcher not found"),
-            |watcher| HttpResponse::Ok().json(&watcher.statuses),
-        )
+    let name = path.into_inner();
+    app_state.read().await.watchers.get(&name).map_or_else(
+        || HttpResponse::NotFound().body("Watcher not found"),
+        |watcher| HttpResponse::Ok().json(&watcher.statuses),
+    )
 }
 
 #[derive(Serialize, Deserialize)]
@@ -111,21 +96,17 @@ impl<T> From<SingleOrVec<T>> for Vec<T> {
 #[post("/watchers/{name}/statuses")]
 pub async fn post_watcher_status(
     app_state: web::Data<Arc<RwLock<AppState>>>,
-    name: web::Path<String>,
+    path: web::Path<String>,
     statuses: web::Json<SingleOrVec<watcher::Status>>,
 ) -> impl Responder {
-    app_state
-        .write()
-        .await
-        .watchers
-        .get_mut(&name.into_inner())
-        .map_or_else(
-            || HttpResponse::NotFound().body("Watcher not found"),
-            |watcher| {
-                watcher
-                    .statuses
-                    .push_multiple(Vec::from(statuses.into_inner()));
-                HttpResponse::Created().finish()
-            },
-        )
+    let name = path.into_inner();
+    app_state.write().await.watchers.get_mut(&name).map_or_else(
+        || HttpResponse::NotFound().body("Watcher not found"),
+        |watcher| {
+            watcher
+                .statuses
+                .push_multiple(Vec::from(statuses.into_inner()));
+            HttpResponse::Created().finish()
+        },
+    )
 }
