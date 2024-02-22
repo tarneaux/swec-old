@@ -25,9 +25,9 @@ pub fn read_only_router() -> axum::Router<Arc<RwLock<AppState>>> {
 // The read-write API.
 pub fn read_write_router() -> axum::Router<Arc<RwLock<AppState>>> {
     read_only_router()
+        .route("/watchers/:name", delete(delete_watcher))
         .route("/watchers/:name/spec", post(post_watcher_spec))
         .route("/watchers/:name/spec", put(put_watcher_spec))
-        .route("/watchers/:name", delete(delete_watcher))
         .route("/watchers/:name/statuses", post(post_watcher_status))
 }
 
