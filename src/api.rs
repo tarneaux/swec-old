@@ -1,7 +1,7 @@
 use axum::{
     extract::{Path, State},
     http::StatusCode,
-    routing::{get, post, put},
+    routing::{delete, get, post, put},
     Json,
 };
 use chrono::{DateTime, Local};
@@ -27,6 +27,7 @@ pub fn read_write_router() -> axum::Router<Arc<RwLock<AppState>>> {
     read_only_router()
         .route("/watchers/:name/spec", post(post_watcher_spec))
         .route("/watchers/:name/spec", put(put_watcher_spec))
+        .route("/watchers/:name", delete(delete_watcher))
         .route("/watchers/:name/statuses", post(post_watcher_status))
 }
 
@@ -60,6 +61,16 @@ pub async fn get_watcher(
     app_state.read().await.watchers.get(&name).map_or_else(
         || (StatusCode::NOT_FOUND, Json(None)),
         |watcher| (StatusCode::OK, Json(Some(watcher.clone()))),
+    )
+}
+
+pub async fn delete_watcher(
+    State(app_state): State<Arc<RwLock<AppState>>>,
+    Path(name): Path<String>,
+) -> (StatusCode, Json<Option<watcher::Watcher>>) {
+    app_state.write().await.watchers.remove(&name).map_or_else(
+        || (StatusCode::NOT_FOUND, Json(None)),
+        |watcher| (StatusCode::OK, Json(Some(watcher))),
     )
 }
 
