@@ -177,6 +177,35 @@ impl<T> From<VecDeque<T>> for RingBuffer<T> {
     }
 }
 
+impl<T> Iterator for RingBuffer<T>
+where
+    T: Clone,
+{
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.pop_front()
+    }
+}
+
+impl<T> DoubleEndedIterator for RingBuffer<T>
+where
+    T: Clone,
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.inner.pop_back()
+    }
+}
+
+impl<'a, T> IntoIterator for &'a RingBuffer<T> {
+    type Item = &'a T;
+    type IntoIter = std::collections::vec_deque::Iter<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.inner.iter()
+    }
+}
+
 pub struct ResizeError {
     new_capacity: usize,
     length: usize,
@@ -217,7 +246,10 @@ mod tests {
         rb.push(8);
         rb.push(9);
         rb.push(10);
-        assert_eq!(rb.iter().copied().collect::<Vec<_>>(), vec![6, 7, 8, 9, 10]);
+        assert_eq!(
+            (&rb).into_iter().collect::<Vec<_>>(),
+            vec![&6, &7, &8, &9, &10]
+        );
         assert_eq!(rb.capacity(), 5);
         assert_eq!(rb.len(), 5);
         assert!(!rb.is_empty());
@@ -245,5 +277,15 @@ mod tests {
             vec![1, 2, 3, 4, 5, 6, 7]
         );
         assert_eq!(rb.capacity(), 7);
+    }
+
+    #[test]
+    fn test_rev_iter() {
+        let mut rb = RingBuffer::<i32>::new(5);
+        rb.push_multiple(1..=10);
+        let iter = rb.iter().rev();
+        assert_eq!(iter.copied().collect::<Vec<_>>(), vec![10, 9, 8, 7, 6]);
+        let iter = rb.rev();
+        assert_eq!(iter.collect::<Vec<_>>(), vec![10, 9, 8, 7, 6]);
     }
 }
