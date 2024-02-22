@@ -64,17 +64,16 @@ async fn main() -> Result<()> {
 
     eprintln!("Starting servers");
 
+    let server_end_message = |v| match v {
+        Ok(()) => "Server shut down".to_string(),
+        Err(e) => format!("Server shut down with error: {e}"),
+    };
+
     // Wait for a server to shut down or for a stop signal to be received.
     let end_message = tokio::select! {
-        _ = public_server => {
-            "Public server shut down, shutting down private server"
-        },
-        _ = private_server => {
-            "Private server shut down, shutting down public server"
-        },
-        () = wait_for_stop_signal() => {
-            "Interrupt received, shutting down servers"
-        },
+        v = public_server => server_end_message(v),
+        v = private_server => server_end_message(v),
+        () = wait_for_stop_signal() => "Interrupt received".to_string(),
     };
 
     eprintln!("{end_message}");
