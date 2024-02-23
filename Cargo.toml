@@ -1,28 +1,3 @@
-[package]
-name = "swec"
-version = "0.1.0"
-edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-# Main server
-[[bin]]
-name = "swec"
-path = "src/main.rs"
-
-
-# Example client
-[[bin]]
-name = "example-client"
-path = "src/example_client.rs"
-
-
-[dependencies]
-chrono = { version = "0", features = ["serde"] }
-futures = "0"
-reqwest = { version = "0", features = ["json"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-tokio = { version="1", features=["full"] }
-color-eyre = "0"
-axum = "0"
+[workspace]
+members = ["swec", "swec-watcher"]
+resolver = "2"
