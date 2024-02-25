@@ -1,5 +1,4 @@
 use clap::Parser;
-use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use swec_client::{ReadApi, ReadWriteClient, WriteApi};
 
@@ -30,9 +29,9 @@ async fn main() {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Debug, Clone)]
 enum Checker {
-    Http { url: String },
+    Http { url: reqwest::Url },
 }
 
 impl Checker {
@@ -43,7 +42,7 @@ impl Checker {
                     .timeout(std::time::Duration::from_secs(timeout))
                     .build()
                     .unwrap();
-                match client.get(url).send().await {
+                match client.get(url.clone()).send().await {
                     Ok(response) => {
                         if response.status().is_success() {
                             swec_core::Status {
@@ -68,16 +67,20 @@ impl Checker {
 }
 
 /// Create a `Checker` from a string.
-/// The string should be in the format `http:<url>`.
+/// The string should be in the format `http#<url>`.
 impl FromStr for Checker {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let parts: Vec<&str> = s.splitn(2, ':').collect();
+        let parts: Vec<&str> = s.splitn(2, '#').collect();
         match parts.as_slice() {
-            ["http", url] => Ok(Self::Http {
-                url: (*url).to_string(),
-            }),
+            ["http", url] => {
+                let url: reqwest::Url = url.parse().map_err(|e| format!("Invalid URL: {}", e))?;
+                if !["http", "https"].contains(&url.scheme()) {
+                    return Err(format!("Invalid scheme: {}", url.scheme()));
+                }
+                Ok(Self::Http { url })
+            }
             _ => Err(format!("Invalid checker: {s}")),
         }
     }
