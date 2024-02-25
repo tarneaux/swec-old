@@ -1,13 +1,18 @@
 use clap::Parser;
 use std::str::FromStr;
 use swec_client::{ReadApi, ReadWriteClient, WriteApi};
+use tracing::{debug, info, warn};
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::fmt::init();
     let args = Args::parse();
-    let client = ReadWriteClient::new(args.api_url);
-    // Make sure the watcher exists
+    info!("Starting watcher: {}", args.name);
+    let client = ReadWriteClient::new(args.api_url.clone());
+    debug!("API client created. API URL: {}", args.api_url);
+    debug!("Checking if watcher exists");
     if client.get_watcher(&args.name).await.is_err() {
+        info!("Watcher does not exist. Sending POST request to create it");
         client
             .post_watcher_spec(
                 &args.name,
@@ -18,13 +23,31 @@ async fn main() {
             )
             .await
             .unwrap();
+    } else {
+        info!("Watcher already exists. Sending PUT request to update spec just in case");
+        client
+            .put_watcher_spec(
+                &args.name,
+                swec_core::Spec {
+                    description: args.description.clone(),
+                    url: None, // TODO
+                },
+            )
+            .await
+            .unwrap();
     }
+    info!("Starting main loop");
     loop {
+        debug!("Checking {}", args.name);
         let status = args.checker.check(args.timeout).await;
+        debug!("Status of {}: {status:?}", args.name);
         client
             .post_watcher_status(&args.name, status)
             .await
-            .unwrap();
+            .unwrap_or_else(|e| {
+                warn!("Failed to post status: {e:?}");
+            });
+        debug!("Sleeping for {} seconds", args.interval);
         tokio::time::sleep(tokio::time::Duration::from_secs(args.interval)).await;
     }
 }

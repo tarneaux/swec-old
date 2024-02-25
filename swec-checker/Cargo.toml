@@ -13,3 +13,5 @@ serde = "1.0.197"
 tokio = "1.36.0"
 swec-core = { path = "../swec-core" }
 swec-client = { path = "../swec-client" }
+tracing = "0.1.40"
+tracing-subscriber = "0.3.18"
