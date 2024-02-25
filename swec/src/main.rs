@@ -16,7 +16,7 @@ use swec_core::watcher;
 async fn main() -> Result<()> {
     // TODO: config file and/or command line arguments
     let watchers_path = Path::new("watchers.json");
-    let history_len = 10;
+    let history_len = 3600;
     let truncate_histories = false;
 
     eprintln!("Restoring watchers from file");
