@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use swec::watcher;
+use swec_core::watcher;
 
 // The read-only API.
 pub fn read_only_router() -> axum::Router<Arc<RwLock<AppState>>> {
