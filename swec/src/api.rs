@@ -1,3 +1,4 @@
+use crate::StatusRingBuffer;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -32,7 +33,7 @@ pub fn read_write_router() -> axum::Router<Arc<RwLock<AppState>>> {
 }
 
 pub struct AppState {
-    pub watchers: BTreeMap<String, watcher::Watcher>,
+    pub watchers: BTreeMap<String, watcher::Watcher<StatusRingBuffer>>,
     pub history_len: usize,
 }
 
@@ -41,15 +42,20 @@ impl AppState {
         if self.watchers.contains_key(&name) {
             return Err(eyre!("Watcher already exists"));
         }
-        self.watchers
-            .insert(name, watcher::Watcher::new(watcher_spec, self.history_len));
+        self.watchers.insert(
+            name,
+            watcher::Watcher::new(watcher_spec, StatusRingBuffer::new(self.history_len)),
+        );
         Ok(())
     }
 }
 
 pub async fn get_watchers(
     State(app_state): State<Arc<RwLock<AppState>>>,
-) -> (StatusCode, Json<BTreeMap<String, watcher::Watcher>>) {
+) -> (
+    StatusCode,
+    Json<BTreeMap<String, watcher::Watcher<StatusRingBuffer>>>,
+) {
     let watchers = &app_state.read().await.watchers;
     (StatusCode::OK, Json(watchers.clone()))
 }
@@ -57,7 +63,7 @@ pub async fn get_watchers(
 pub async fn get_watcher(
     State(app_state): State<Arc<RwLock<AppState>>>,
     Path(name): Path<String>,
-) -> (StatusCode, Json<Option<watcher::Watcher>>) {
+) -> (StatusCode, Json<Option<watcher::Watcher<StatusRingBuffer>>>) {
     app_state.read().await.watchers.get(&name).map_or_else(
         || (StatusCode::NOT_FOUND, Json(None)),
         |watcher| (StatusCode::OK, Json(Some(watcher.clone()))),
@@ -67,7 +73,7 @@ pub async fn get_watcher(
 pub async fn delete_watcher(
     State(app_state): State<Arc<RwLock<AppState>>>,
     Path(name): Path<String>,
-) -> (StatusCode, Json<Option<watcher::Watcher>>) {
+) -> (StatusCode, Json<Option<watcher::Watcher<StatusRingBuffer>>>) {
     app_state.write().await.watchers.remove(&name).map_or_else(
         || (StatusCode::NOT_FOUND, Json(None)),
         |watcher| (StatusCode::OK, Json(Some(watcher))),

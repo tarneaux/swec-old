@@ -1,6 +1,7 @@
 use core::fmt::{self, Debug, Formatter};
 use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, collections::VecDeque};
+use swec_core::{Status, StatusBuffer};
 
 /// A fixed length ring buffer that overwrites the oldest element when full.
 #[derive(Clone, Debug)]
@@ -218,6 +219,23 @@ impl Debug for ResizeError {
             "New capacity ({}) is less than the current length of the buffer ({}).",
             self.new_capacity, self.length
         )
+    }
+}
+
+pub type StatusRingBuffer = RingBuffer<(chrono::DateTime<chrono::Local>, Status)>;
+
+impl StatusBuffer for StatusRingBuffer {
+    fn push(&mut self, status: (chrono::DateTime<chrono::Local>, Status)) {
+        self.push(status);
+    }
+
+    fn get(&self, index: usize) -> Option<(chrono::DateTime<chrono::Local>, Status)> {
+        // Using the inner buffer directly avoids recursion.
+        self.inner.get(index).cloned()
+    }
+
+    fn len(&self) -> usize {
+        self.len()
     }
 }
 

@@ -38,8 +38,11 @@ impl ReadWriteClient {
 pub trait ReadApi {
     fn get_watchers(
         &self,
-    ) -> impl Future<Output = Result<BTreeMap<String, Watcher>, ApiError>> + Send;
-    fn get_watcher(&self, name: &str) -> impl Future<Output = Result<Watcher, ApiError>> + Send;
+    ) -> impl Future<Output = Result<BTreeMap<String, Watcher<VecBuffer>>, ApiError>> + Send;
+    fn get_watcher(
+        &self,
+        name: &str,
+    ) -> impl Future<Output = Result<Watcher<VecBuffer>, ApiError>> + Send;
     fn get_watcher_spec(&self, name: &str) -> impl Future<Output = Result<Spec, ApiError>> + Send;
     fn get_watcher_statuses(
         &self,

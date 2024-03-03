@@ -10,6 +10,8 @@ use tokio::{
 };
 
 mod api;
+mod ringbuffer;
+pub use ringbuffer::{RingBuffer, StatusRingBuffer};
 use swec_core::watcher;
 
 #[tokio::main]
@@ -98,7 +100,10 @@ async fn wait_for_stop_signal() {
     futures::future::select_all(interrupt_futures).await;
 }
 
-async fn save_watchers(path: &Path, watchers: BTreeMap<String, watcher::Watcher>) -> Result<()> {
+async fn save_watchers(
+    path: &Path,
+    watchers: BTreeMap<String, watcher::Watcher<StatusRingBuffer>>,
+) -> Result<()> {
     let mut file = tokio::fs::File::create(path).await?;
     let serialized = serde_json::to_string(&watchers)?;
     file.write_all(serialized.as_bytes()).await?;
@@ -109,11 +114,12 @@ async fn load_watchers(
     path: &Path,
     history_length: usize,
     truncate: bool,
-) -> Result<BTreeMap<String, watcher::Watcher>> {
+) -> Result<BTreeMap<String, watcher::Watcher<StatusRingBuffer>>> {
     let mut file = tokio::fs::File::open(path).await?;
     let mut contents = Vec::new();
     file.read_to_end(&mut contents).await?;
-    let mut deserialized: BTreeMap<String, watcher::Watcher> = serde_json::from_slice(&contents)?;
+    let mut deserialized: BTreeMap<String, watcher::Watcher<StatusRingBuffer>> =
+        serde_json::from_slice(&contents)?;
     // Make sure the histories are all the correct length
     for watcher in deserialized.values_mut() {
         if truncate {

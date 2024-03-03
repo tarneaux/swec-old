@@ -9,10 +9,10 @@ pub fn read_api_derive(input: TokenStream) -> TokenStream {
     let name = &ast.ident;
     let gen = quote! {
         impl ReadApi for #name {
-            async fn get_watchers(&self) -> Result<BTreeMap<String, Watcher>, ApiError> {
+            async fn get_watchers(&self) -> Result<BTreeMap<String, Watcher<VecBuffer>>, ApiError> {
                 api_query!(get, format!("{}/watchers", self.base_url), true)
             }
-            async fn get_watcher(&self, name: &str) -> Result<Watcher, ApiError> {
+            async fn get_watcher(&self, name: &str) -> Result<Watcher<VecBuffer>, ApiError> {
                 api_query!(get, format!("{}/watchers/{}", self.base_url, name), true)
             }
             async fn get_watcher_spec(&self, name: &str) -> Result<Spec, ApiError> {
