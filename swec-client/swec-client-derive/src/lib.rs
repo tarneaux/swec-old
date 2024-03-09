@@ -110,8 +110,7 @@ pub fn api_query(input: TokenStream) -> TokenStream {
     };
     let data_str = input
         .data
-        .map(|data| quote! { .json(&#data) })
-        .unwrap_or(quote! {});
+        .map_or_else(|| quote! {}, |data| quote! { .json(&#data) });
     let gen = quote! {
         {
             let url = #url;
