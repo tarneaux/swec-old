@@ -11,34 +11,18 @@ async fn main() {
     let client = swec_client::ReadWrite::new(args.api_url.clone());
     debug!("API client created. API URL: {}", args.api_url);
     debug!("Checking if watcher exists");
+    let spec = swec_core::Spec {
+        description: args.description.clone(),
+        url: match &args.checker {
+            Checker::Http { url } => Some(url.to_string()),
+        },
+    };
     if client.get_watcher(&args.name).await.is_err() {
         info!("Watcher does not exist. Sending POST request to create it");
-        client
-            .post_watcher_spec(
-                &args.name,
-                swec_core::Spec {
-                    description: args.description.clone(),
-                    url: match &args.checker {
-                        Checker::Http { url } => Some(url.to_string()),
-                    },
-                },
-            )
-            .await
-            .unwrap();
+        client.post_watcher_spec(&args.name, spec).await.unwrap();
     } else {
         info!("Watcher already exists. Sending PUT request to update spec just in case");
-        client
-            .put_watcher_spec(
-                &args.name,
-                swec_core::Spec {
-                    description: args.description.clone(),
-                    url: match &args.checker {
-                        Checker::Http { url } => Some(url.to_string()),
-                    },
-                },
-            )
-            .await
-            .unwrap();
+        client.put_watcher_spec(&args.name, spec).await.unwrap();
     }
     info!("Starting main loop");
     loop {
