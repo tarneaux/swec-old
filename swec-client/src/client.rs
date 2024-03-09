@@ -1,9 +1,9 @@
 use chrono::{DateTime, Local};
 use std::collections::BTreeMap;
-use swec_core::*;
+use swec_core::{Spec, Status, VecBuffer, Watcher};
 
 use std::future::Future;
-use swec_client_derive::*;
+use swec_client_derive::{api_query, ReadApi, WriteApi};
 
 #[derive(Clone, Debug, ReadApi)]
 pub struct ReadOnlyClient {
@@ -12,8 +12,9 @@ pub struct ReadOnlyClient {
 }
 
 impl ReadOnlyClient {
+    #[must_use]
     pub fn new(base_url: String) -> Self {
-        ReadOnlyClient {
+        Self {
             base_url,
             client: reqwest::Client::new(),
         }
@@ -27,8 +28,9 @@ pub struct ReadWriteClient {
 }
 
 impl ReadWriteClient {
+    #[must_use]
     pub fn new(base_url: String) -> Self {
-        ReadWriteClient {
+        Self {
             base_url,
             client: reqwest::Client::new(),
         }
@@ -82,12 +84,12 @@ pub enum ApiError {
 
 impl From<reqwest::Error> for ApiError {
     fn from(e: reqwest::Error) -> Self {
-        ApiError::Reqwest(e)
+        Self::Reqwest(e)
     }
 }
 
 impl From<serde_json::Error> for ApiError {
     fn from(e: serde_json::Error) -> Self {
-        ApiError::Serde(e)
+        Self::Serde(e)
     }
 }

@@ -239,10 +239,10 @@ impl StatusBuffer for StatusRingBuffer {
     }
 
     fn from_vec(vec: Vec<(chrono::DateTime<chrono::Local>, Status)>) -> Self {
-        RingBuffer::from(VecDeque::from(vec))
+        Self::from(VecDeque::from(vec))
     }
 
-    fn into_vec(&self) -> Vec<(chrono::DateTime<chrono::Local>, Status)> {
+    fn as_vec(&self) -> Vec<(chrono::DateTime<chrono::Local>, Status)> {
         self.inner.iter().cloned().collect()
     }
 }

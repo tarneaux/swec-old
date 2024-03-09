@@ -81,7 +81,7 @@ impl Checker {
                     }
                     Err(e) => swec_core::Status {
                         is_up: false,
-                        message: format!("Error: {}", e),
+                        message: format!("Error: {e}"),
                     },
                 }
             }
@@ -98,7 +98,7 @@ impl FromStr for Checker {
         let parts: Vec<&str> = s.splitn(2, '#').collect();
         match parts.as_slice() {
             ["http", url] => {
-                let url: reqwest::Url = url.parse().map_err(|e| format!("Invalid URL: {}", e))?;
+                let url: reqwest::Url = url.parse().map_err(|e| format!("Invalid URL: {e}"))?;
                 if !["http", "https"].contains(&url.scheme()) {
                     return Err(format!("Invalid scheme: {}", url.scheme()));
                 }

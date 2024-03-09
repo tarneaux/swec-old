@@ -13,7 +13,7 @@ pub struct Watcher<Buffer: StatusBuffer> {
 impl<Buffer: StatusBuffer> Watcher<Buffer> {
     #[must_use]
     /// Create a new watcher with an empty history.
-    pub fn new(spec: Spec, buf: Buffer) -> Self {
+    pub const fn new(spec: Spec, buf: Buffer) -> Self {
         Self {
             spec,
             statuses: buf,
@@ -25,7 +25,7 @@ impl<Buffer: StatusBuffer> Serialize for Watcher<Buffer> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut map = serializer.serialize_map(Some(2))?;
         map.serialize_entry("spec", &self.spec)?;
-        map.serialize_entry("statuses", &self.statuses.into_vec())?;
+        map.serialize_entry("statuses", &self.statuses.as_vec())?;
         map.end()
     }
 }
@@ -35,7 +35,7 @@ impl<'de, Buffer: StatusBuffer> Deserialize<'de> for Watcher<Buffer> {
         let deser = deserializer.deserialize_map(WatcherVisitor)?;
         let statuses = deser.statuses;
         let statuses = Buffer::from_vec(statuses);
-        Ok(Watcher {
+        Ok(Self {
             spec: deser.spec,
             statuses,
         })
@@ -109,8 +109,11 @@ pub trait StatusBuffer {
     fn push(&mut self, status: (DateTime<Local>, Status));
     fn get(&self, index: usize) -> Option<(DateTime<Local>, Status)>;
     fn len(&self) -> usize;
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
     fn from_vec(vec: VecBuffer) -> Self;
-    fn into_vec(&self) -> VecBuffer;
+    fn as_vec(&self) -> VecBuffer;
 }
 
 pub type VecBuffer = Vec<(DateTime<Local>, Status)>;
@@ -132,7 +135,7 @@ impl StatusBuffer for VecBuffer {
         vec
     }
 
-    fn into_vec(&self) -> VecBuffer {
+    fn as_vec(&self) -> VecBuffer {
         self.clone()
     }
 }
@@ -147,7 +150,7 @@ impl StatusBuffer for BTreeMapBuffer {
     fn get(&self, index: usize) -> Option<(DateTime<Local>, Status)> {
         self.iter()
             .nth(index)
-            .and_then(|(time, status)| Some((time.clone(), status.clone())))
+            .map(|(time, status)| (*time, status.clone()))
     }
 
     fn len(&self) -> usize {
@@ -158,9 +161,9 @@ impl StatusBuffer for BTreeMapBuffer {
         vec.into_iter().collect()
     }
 
-    fn into_vec(&self) -> VecBuffer {
+    fn as_vec(&self) -> VecBuffer {
         self.iter()
-            .map(|(time, status)| (time.clone(), status.clone()))
+            .map(|(time, status)| (*time, status.clone()))
             .collect()
     }
 }

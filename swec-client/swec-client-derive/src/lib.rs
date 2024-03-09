@@ -3,6 +3,9 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::parse_macro_input;
 
+/// Derive the `ReadApi` trait for a type.
+/// # Panics
+/// Panics if `syn::parse` fails.
 #[proc_macro_derive(ReadApi)]
 pub fn read_api_derive(input: TokenStream) -> TokenStream {
     let ast: syn::DeriveInput = syn::parse(input).unwrap();
@@ -29,6 +32,9 @@ pub fn read_api_derive(input: TokenStream) -> TokenStream {
     gen.into()
 }
 
+/// Derive the `WriteApi` trait for a type.
+/// # Panics
+/// Panics if `syn::parse` fails.
 #[proc_macro_derive(WriteApi)]
 pub fn write_api_derive(input: TokenStream) -> TokenStream {
     let ast: syn::DeriveInput = syn::parse(input).unwrap();
@@ -72,11 +78,11 @@ impl syn::parse::Parse for ApiQuery {
         } else {
             None
         };
-        Ok(ApiQuery {
+        Ok(Self {
             method,
             url,
-            data,
             get_json,
+            data,
         })
     }
 }
@@ -85,7 +91,7 @@ impl syn::parse::Parse for ApiQuery {
 /// Arguments:
 /// - method: The HTTP method to use (get, post, put, delete)
 /// - url: The URL to query
-/// - get_json: Whether to parse the response as JSON and return it
+/// - `get_json`: Whether to parse the response as JSON and return it
 /// - data: The data to send in the request body
 #[proc_macro]
 pub fn api_query(input: TokenStream) -> TokenStream {
