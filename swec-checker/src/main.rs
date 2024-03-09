@@ -18,7 +18,9 @@ async fn main() {
                 &args.name,
                 swec_core::Spec {
                     description: args.description.clone(),
-                    url: None, // TODO
+                    url: match &args.checker {
+                        Checker::Http { url } => Some(url.to_string()),
+                    },
                 },
             )
             .await
@@ -30,7 +32,9 @@ async fn main() {
                 &args.name,
                 swec_core::Spec {
                     description: args.description.clone(),
-                    url: None, // TODO
+                    url: match &args.checker {
+                        Checker::Http { url } => Some(url.to_string()),
+                    },
                 },
             )
             .await
