@@ -13,6 +13,7 @@ mod api;
 mod ringbuffer;
 pub use ringbuffer::{RingBuffer, StatusRingBuffer};
 use swec_core::watcher;
+use tracing::{info, warn};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -21,13 +22,15 @@ async fn main() -> Result<()> {
     let history_len = 3600;
     let truncate_histories = false;
 
-    eprintln!("Restoring watchers from file");
+    tracing_subscriber::fmt::init();
+
+    info!("Restoring watchers from file");
 
     let watchers = load_watchers(watchers_path, history_len, truncate_histories)
         .await
         .unwrap_or_else(|e| {
-            eprintln!("Failed to restore watchers from file: {e}");
-            eprintln!("Starting with an empty set of watchers");
+            warn!("Failed to restore watchers from file: {e}");
+            warn!("Starting with an empty set of watchers");
             BTreeMap::new()
         });
 
@@ -52,7 +55,7 @@ async fn main() -> Result<()> {
     let private_server =
         axum::serve(private_listener, private_router.into_make_service()).into_future();
 
-    eprintln!("Starting servers");
+    info!("Starting servers");
 
     let server_end_message = |v| match v {
         Ok(()) => "Server shut down".to_string(),
@@ -66,9 +69,9 @@ async fn main() -> Result<()> {
         () = wait_for_stop_signal() => "Interrupt received".to_string(),
     };
 
-    eprintln!("{end_message}");
+    info!("{end_message}");
 
-    eprintln!("Saving watchers to file");
+    info!("Saving watchers to file");
     save_watchers(watchers_path, app_state.read().await.watchers.clone()).await?;
 
     Ok(())

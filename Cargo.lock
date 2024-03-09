@@ -1264,6 +1264,7 @@ dependencies = [
  "swec-core",
  "tokio",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
