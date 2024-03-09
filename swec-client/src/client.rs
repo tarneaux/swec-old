@@ -6,12 +6,12 @@ use std::future::Future;
 use swec_client_derive::{api_query, ReadApi, WriteApi};
 
 #[derive(Clone, Debug, ReadApi)]
-pub struct ReadOnlyClient {
+pub struct ReadOnly {
     base_url: String,
     client: reqwest::Client,
 }
 
-impl ReadOnlyClient {
+impl ReadOnly {
     #[must_use]
     pub fn new(base_url: String) -> Self {
         Self {
@@ -22,12 +22,12 @@ impl ReadOnlyClient {
 }
 
 #[derive(Clone, Debug, ReadApi, WriteApi)]
-pub struct ReadWriteClient {
+pub struct ReadWrite {
     base_url: String,
     client: reqwest::Client,
 }
 
-impl ReadWriteClient {
+impl ReadWrite {
     #[must_use]
     pub fn new(base_url: String) -> Self {
         Self {
