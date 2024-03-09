@@ -15,3 +15,4 @@ tokio = { version="1", features=["full"] }
 color-eyre = "0"
 axum = "0"
 swec-core = { path = "../swec-core" }
+tracing = "0.1.40"

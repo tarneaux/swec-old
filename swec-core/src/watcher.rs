@@ -1,8 +1,8 @@
 use chrono::{DateTime, Local};
-use serde::{Deserialize, Serialize};
+use serde::{de::Visitor, ser::SerializeMap, Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Clone)]
 pub struct Watcher<Buffer: StatusBuffer> {
     /// Information about the service, for humans
     pub spec: Spec,
@@ -18,6 +18,65 @@ impl<Buffer: StatusBuffer> Watcher<Buffer> {
             spec,
             statuses: buf,
         }
+    }
+}
+
+impl<Buffer: StatusBuffer> Serialize for Watcher<Buffer> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut map = serializer.serialize_map(Some(2))?;
+        map.serialize_entry("spec", &self.spec)?;
+        map.serialize_entry("statuses", &self.statuses.into_vec())?;
+        map.end()
+    }
+}
+
+impl<'de, Buffer: StatusBuffer> Deserialize<'de> for Watcher<Buffer> {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let deser = deserializer.deserialize_map(WatcherVisitor)?;
+        let statuses = deser.statuses;
+        let statuses = Buffer::from_vec(statuses);
+        Ok(Watcher {
+            spec: deser.spec,
+            statuses,
+        })
+    }
+}
+
+struct WatcherVisitor;
+
+impl<'de> Visitor<'de> for WatcherVisitor {
+    type Value = Watcher<VecBuffer>;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("a watcher with its spec and statuses")
+    }
+
+    fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+        let mut spec = None;
+        let mut statuses: Option<VecBuffer> = None;
+        while let Some(key) = map.next_key()? {
+            match key {
+                "spec" => {
+                    if spec.is_some() {
+                        return Err(serde::de::Error::duplicate_field("spec"));
+                    }
+                    spec = Some(map.next_value()?);
+                }
+                "statuses" => {
+                    if statuses.is_some() {
+                        return Err(serde::de::Error::duplicate_field("statuses"));
+                    }
+                    statuses = Some(map.next_value()?);
+                }
+                _ => {
+                    return Err(serde::de::Error::unknown_field(key, &["spec", "statuses"]));
+                }
+            }
+        }
+        let spec = spec.ok_or_else(|| serde::de::Error::missing_field("spec"))?;
+        let statuses = statuses.ok_or_else(|| serde::de::Error::missing_field("statuses"))?;
+        // TODO: conversion
+        Ok(Watcher { spec, statuses })
     }
 }
 
@@ -50,6 +109,8 @@ pub trait StatusBuffer {
     fn push(&mut self, status: (DateTime<Local>, Status));
     fn get(&self, index: usize) -> Option<(DateTime<Local>, Status)>;
     fn len(&self) -> usize;
+    fn from_vec(vec: VecBuffer) -> Self;
+    fn into_vec(&self) -> VecBuffer;
 }
 
 pub type VecBuffer = Vec<(DateTime<Local>, Status)>;
@@ -65,6 +126,14 @@ impl StatusBuffer for VecBuffer {
 
     fn len(&self) -> usize {
         self.len()
+    }
+
+    fn from_vec(vec: VecBuffer) -> Self {
+        vec
+    }
+
+    fn into_vec(&self) -> VecBuffer {
+        self.clone()
     }
 }
 
@@ -83,5 +152,15 @@ impl StatusBuffer for BTreeMapBuffer {
 
     fn len(&self) -> usize {
         self.len()
+    }
+
+    fn from_vec(vec: VecBuffer) -> Self {
+        vec.into_iter().collect()
+    }
+
+    fn into_vec(&self) -> VecBuffer {
+        self.iter()
+            .map(|(time, status)| (time.clone(), status.clone()))
+            .collect()
     }
 }

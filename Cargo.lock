@@ -1263,6 +1263,7 @@ dependencies = [
  "serde_json",
  "swec-core",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
