@@ -8,6 +8,7 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     sync::RwLock,
 };
+use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 
 mod api;
 mod ringbuffer;
@@ -50,7 +51,11 @@ async fn main() -> Result<()> {
                     swec_version: VERSION.to_string(),
                 },
                 app_state.clone(),
-            ));
+            ))
+            .layer(
+                TraceLayer::new_for_http()
+                    .make_span_with(DefaultMakeSpan::default().include_headers(true)),
+            );
         let listener = tokio::net::TcpListener::bind(public_address).await?;
         axum::serve(listener, router.into_make_service()).into_future()
     };
@@ -64,7 +69,11 @@ async fn main() -> Result<()> {
                     swec_version: VERSION.to_string(),
                 },
                 app_state.clone(),
-            ));
+            ))
+            .layer(
+                TraceLayer::new_for_http()
+                    .make_span_with(DefaultMakeSpan::default().include_headers(true)),
+            );
         let listener = tokio::net::TcpListener::bind(private_address).await?;
         axum::serve(listener, router.into_make_service()).into_future()
     };
