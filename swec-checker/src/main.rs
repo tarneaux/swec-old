@@ -48,7 +48,7 @@ async fn main() {
     loop {
         debug!("Checking {}", args.name);
         let status = args.checker.check(args.timeout).await;
-        debug!("Status of {}: {status:?}", args.name);
+        debug!("Status of {}: {status}", args.name);
         client
             .post_watcher_status(&args.name, status)
             .await

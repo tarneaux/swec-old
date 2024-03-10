@@ -1,6 +1,7 @@
 use chrono::{DateTime, Local};
 use serde::{de::Visitor, ser::SerializeMap, Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::fmt::{self, Display, Formatter};
 
 #[derive(Debug, Clone)]
 pub struct Watcher<Buffer: StatusBuffer> {
@@ -103,6 +104,13 @@ pub struct Status {
     pub is_up: bool,
     /// Human readable information about the status
     pub message: String,
+}
+
+impl Display for Status {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let up_or_down = if self.is_up { "Up" } else { "Down" };
+        write!(f, "{}: {}", up_or_down, self.message)
+    }
 }
 
 pub trait StatusBuffer {
