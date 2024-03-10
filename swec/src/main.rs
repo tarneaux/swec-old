@@ -39,10 +39,7 @@ async fn main() -> Result<()> {
             BTreeMap::new()
         });
 
-    let app_state = Arc::new(RwLock::new(api::AppState {
-        watchers,
-        history_len,
-    }));
+    let app_state = Arc::new(RwLock::new(api::AppState::new(watchers, history_len)));
 
     let public_server = {
         let router = Router::new()
@@ -89,7 +86,7 @@ async fn main() -> Result<()> {
     info!("{end_message}");
 
     info!("Saving watchers to file");
-    save_watchers(watchers_path, app_state.read().await.watchers.clone()).await?;
+    save_watchers(watchers_path, app_state.read().await.get_watchers().clone()).await?;
 
     Ok(())
 }
