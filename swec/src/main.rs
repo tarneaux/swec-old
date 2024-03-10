@@ -25,6 +25,7 @@ async fn main() -> Result<()> {
     let truncate_histories = false;
     let public_address = "127.0.0.1:8080";
     let private_address = "127.0.0.1:8081";
+    let api_path = "/api/v1";
 
     tracing_subscriber::fmt::init();
 
@@ -45,7 +46,7 @@ async fn main() -> Result<()> {
 
     let public_server = {
         let router = Router::new()
-            .nest("/api/v1", api::read_only_router())
+            .nest(api_path, api::read_only_router())
             .with_state((
                 ApiInfo {
                     writable: false,
@@ -59,7 +60,7 @@ async fn main() -> Result<()> {
 
     let private_server = {
         let router = Router::new()
-            .nest("/api/v1", api::read_write_router())
+            .nest(api_path, api::read_write_router())
             .with_state((
                 ApiInfo {
                     writable: true,
