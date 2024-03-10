@@ -74,7 +74,7 @@ async fn main() -> Result<()> {
     info!("Starting servers");
 
     let server_end_message = |v| match v {
-        Ok(()) => "Server shut down".to_string(),
+        Ok(()) => "Server shut down without errors".to_string(),
         Err(e) => format!("Server shut down with error: {e}"),
     };
 
