@@ -2,6 +2,7 @@ use chrono::{DateTime, Local};
 use serde::{de::Visitor, ser::SerializeMap, Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::{self, Display, Formatter};
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct Watcher<Buffer: StatusBuffer> {
@@ -9,15 +10,18 @@ pub struct Watcher<Buffer: StatusBuffer> {
     pub spec: Spec,
     /// Status history of the service
     pub statuses: Buffer,
+    /// A unique identifier for the watcher
+    id: Uuid,
 }
 
 impl<Buffer: StatusBuffer> Watcher<Buffer> {
     #[must_use]
     /// Create a new watcher with an empty history.
-    pub const fn new(spec: Spec, buf: Buffer) -> Self {
+    pub fn new(spec: Spec, buf: Buffer) -> Self {
         Self {
             spec,
             statuses: buf,
+            id: Uuid::new_v4(),
         }
     }
 }
@@ -27,6 +31,7 @@ impl<Buffer: StatusBuffer> Serialize for Watcher<Buffer> {
         let mut map = serializer.serialize_map(Some(2))?;
         map.serialize_entry("spec", &self.spec)?;
         map.serialize_entry("statuses", &self.statuses.as_vec())?;
+        map.serialize_entry("id", &self.id)?;
         map.end()
     }
 }
@@ -39,6 +44,7 @@ impl<'de, Buffer: StatusBuffer> Deserialize<'de> for Watcher<Buffer> {
         Ok(Self {
             spec: deser.spec,
             statuses,
+            id: deser.id,
         })
     }
 }
@@ -55,6 +61,7 @@ impl<'de> Visitor<'de> for WatcherVisitor {
     fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
         let mut spec = None;
         let mut statuses = None;
+        let mut id = None;
         while let Some(key) = map.next_key()? {
             match key {
                 "spec" => {
@@ -69,6 +76,12 @@ impl<'de> Visitor<'de> for WatcherVisitor {
                     }
                     statuses = Some(map.next_value()?);
                 }
+                "id" => {
+                    if id.is_some() {
+                        return Err(serde::de::Error::duplicate_field("id"));
+                    }
+                    id = Some(map.next_value()?);
+                }
                 _ => {
                     return Err(serde::de::Error::unknown_field(key, &["spec", "statuses"]));
                 }
@@ -76,8 +89,9 @@ impl<'de> Visitor<'de> for WatcherVisitor {
         }
         let spec = spec.ok_or_else(|| serde::de::Error::missing_field("spec"))?;
         let statuses = statuses.ok_or_else(|| serde::de::Error::missing_field("statuses"))?;
+        let id = id.ok_or_else(|| serde::de::Error::missing_field("id"))?;
         // TODO: conversion
-        Ok(Watcher { spec, statuses })
+        Ok(Watcher { spec, statuses, id })
     }
 }
 
