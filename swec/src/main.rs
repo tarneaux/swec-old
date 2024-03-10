@@ -43,33 +43,33 @@ async fn main() -> Result<()> {
         history_len,
     }));
 
-    let public_router = Router::new()
-        .nest("/api/v1", api::read_only_router())
-        .with_state((
-            ApiInfo {
-                writable: false,
-                swec_version: VERSION.to_string(),
-            },
-            app_state.clone(),
-        ));
+    let public_server = {
+        let router = Router::new()
+            .nest("/api/v1", api::read_only_router())
+            .with_state((
+                ApiInfo {
+                    writable: false,
+                    swec_version: VERSION.to_string(),
+                },
+                app_state.clone(),
+            ));
+        let listener = tokio::net::TcpListener::bind(public_address).await?;
+        axum::serve(listener, router.into_make_service()).into_future()
+    };
 
-    let private_router = Router::new()
-        .nest("/api/v1", api::read_write_router())
-        .with_state((
-            ApiInfo {
-                writable: true,
-                swec_version: VERSION.to_string(),
-            },
-            app_state.clone(),
-        ));
-
-    let public_listener = tokio::net::TcpListener::bind(public_address).await?;
-    let private_listener = tokio::net::TcpListener::bind(private_address).await?;
-
-    let public_server =
-        axum::serve(public_listener, public_router.into_make_service()).into_future();
-    let private_server =
-        axum::serve(private_listener, private_router.into_make_service()).into_future();
+    let private_server = {
+        let router = Router::new()
+            .nest("/api/v1", api::read_write_router())
+            .with_state((
+                ApiInfo {
+                    writable: true,
+                    swec_version: VERSION.to_string(),
+                },
+                app_state.clone(),
+            ));
+        let listener = tokio::net::TcpListener::bind(private_address).await?;
+        axum::serve(listener, router.into_make_service()).into_future()
+    };
 
     info!("Starting servers");
 
