@@ -1,15 +1,24 @@
+use async_trait::async_trait;
 use chrono::{DateTime, Local};
 use std::collections::BTreeMap;
 use std::fmt::{self, Display, Formatter};
 use swec_core::{ApiInfo, Spec, Status, VecBuffer, Watcher};
 
-use std::future::Future;
-use swec_client_derive::{api_query, ReadApi, WriteApi};
+use swec_client_derive::api_query;
 
-#[derive(Clone, Debug, ReadApi)]
+#[derive(Clone, Debug)]
 pub struct ReadOnly {
     base_url: String,
     client: reqwest::Client,
+}
+
+impl ReadApi for ReadOnly {
+    fn base_url(&self) -> &str {
+        &self.base_url
+    }
+    fn client(&self) -> &reqwest::Client {
+        &self.client
+    }
 }
 
 impl ReadOnly {
@@ -22,10 +31,27 @@ impl ReadOnly {
     }
 }
 
-#[derive(Clone, Debug, ReadApi, WriteApi)]
+#[derive(Clone, Debug)]
 pub struct ReadWrite {
     base_url: String,
     client: reqwest::Client,
+}
+
+impl ReadApi for ReadWrite {
+    fn base_url(&self) -> &str {
+        &self.base_url
+    }
+    fn client(&self) -> &reqwest::Client {
+        &self.client
+    }
+}
+impl WriteApi for ReadWrite {
+    fn base_url(&self) -> &str {
+        &self.base_url
+    }
+    fn client(&self) -> &reqwest::Client {
+        &self.client
+    }
 }
 
 impl ReadWrite {
@@ -38,44 +64,87 @@ impl ReadWrite {
     }
 }
 
+#[async_trait]
 pub trait ReadApi {
-    fn get_info(&self) -> impl Future<Output = Result<ApiInfo, ApiError>> + Send;
-    fn get_watchers(
-        &self,
-    ) -> impl Future<Output = Result<BTreeMap<String, Watcher<VecBuffer>>, ApiError>> + Send;
-    fn get_watcher(
+    fn base_url(&self) -> &str;
+    fn client(&self) -> &reqwest::Client;
+
+    async fn get_info(&self) -> Result<ApiInfo, ApiError> {
+        api_query!(get, format!("{}/info", self.base_url()), true)
+    }
+
+    async fn get_watchers(&self) -> Result<BTreeMap<String, Watcher<VecBuffer>>, ApiError> {
+        api_query!(get, format!("{}/watchers", self.base_url()), true)
+    }
+
+    async fn get_watcher(&self, name: &str) -> Result<Watcher<VecBuffer>, ApiError> {
+        api_query!(get, format!("{}/watchers/{}", self.base_url(), name), true)
+    }
+
+    async fn get_watcher_spec(&self, name: &str) -> Result<Spec, ApiError> {
+        api_query!(
+            get,
+            format!("{}/watchers/{}/spec", self.base_url(), name),
+            true
+        )
+    }
+
+    async fn get_watcher_statuses(
         &self,
         name: &str,
-    ) -> impl Future<Output = Result<Watcher<VecBuffer>, ApiError>> + Send;
-    fn get_watcher_spec(&self, name: &str) -> impl Future<Output = Result<Spec, ApiError>> + Send;
-    fn get_watcher_statuses(
-        &self,
-        name: &str,
-    ) -> impl Future<Output = Result<Vec<(DateTime<Local>, Status)>, ApiError>> + Send;
-    fn get_watcher_status(
-        &self,
-        name: &str,
-        n: u32,
-    ) -> impl Future<Output = Result<Status, ApiError>> + Send;
+    ) -> Result<Vec<(DateTime<Local>, Status)>, ApiError> {
+        api_query!(
+            get,
+            format!("{}/watchers/{}/statuses", self.base_url(), name),
+            true
+        )
+    }
+
+    async fn get_watcher_status(&self, name: &str, n: u32) -> Result<Status, ApiError> {
+        api_query!(
+            get,
+            format!("{}/watchers/{}/statuses/{}", self.base_url(), name, n),
+            true
+        )
+    }
 }
 
+#[async_trait]
 pub trait WriteApi {
-    fn delete_watcher(&self, name: &str) -> impl Future<Output = Result<(), ApiError>> + Send;
-    fn post_watcher_spec(
-        &self,
-        name: &str,
-        spec: Spec,
-    ) -> impl Future<Output = Result<(), ApiError>> + Send;
-    fn put_watcher_spec(
-        &self,
-        name: &str,
-        spec: Spec,
-    ) -> impl Future<Output = Result<(), ApiError>> + Send;
-    fn post_watcher_status(
-        &self,
-        name: &str,
-        status: Status,
-    ) -> impl Future<Output = Result<(), ApiError>> + Send;
+    fn base_url(&self) -> &str;
+    fn client(&self) -> &reqwest::Client;
+
+    async fn delete_watcher(&self, name: &str) -> Result<(), ApiError> {
+        api_query!(
+            delete,
+            format!("{}/watchers/{}", self.base_url(), name),
+            false
+        )
+    }
+    async fn post_watcher_spec(&self, name: &str, spec: Spec) -> Result<(), ApiError> {
+        api_query!(
+            post,
+            format!("{}/watchers/{}/spec", self.base_url(), name),
+            false,
+            spec
+        )
+    }
+    async fn put_watcher_spec(&self, name: &str, spec: Spec) -> Result<(), ApiError> {
+        api_query!(
+            put,
+            format!("{}/watchers/{}/spec", self.base_url(), name),
+            false,
+            spec
+        )
+    }
+    async fn post_watcher_status(&self, name: &str, status: Status) -> Result<(), ApiError> {
+        api_query!(
+            post,
+            format!("{}/watchers/{}/statuses", self.base_url(), name),
+            false,
+            status
+        )
+    }
 }
 
 #[derive(Debug)]
