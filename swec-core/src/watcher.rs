@@ -54,7 +54,7 @@ impl<'de> Visitor<'de> for WatcherVisitor {
 
     fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
         let mut spec = None;
-        let mut statuses: Option<VecBuffer> = None;
+        let mut statuses = None;
         while let Some(key) = map.next_key()? {
             match key {
                 "spec" => {
