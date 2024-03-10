@@ -1,6 +1,7 @@
 use chrono::{DateTime, Local};
 use std::collections::BTreeMap;
-use swec_core::{Spec, Status, VecBuffer, Watcher};
+use std::fmt::{self, Display, Formatter};
+use swec_core::{ApiInfo, Spec, Status, VecBuffer, Watcher};
 
 use std::future::Future;
 use swec_client_derive::{api_query, ReadApi, WriteApi};
@@ -38,6 +39,7 @@ impl ReadWrite {
 }
 
 pub trait ReadApi {
+    fn get_info(&self) -> impl Future<Output = Result<ApiInfo, ApiError>> + Send;
     fn get_watchers(
         &self,
     ) -> impl Future<Output = Result<BTreeMap<String, Watcher<VecBuffer>>, ApiError>> + Send;
@@ -93,3 +95,14 @@ impl From<serde_json::Error> for ApiError {
         Self::Serde(e)
     }
 }
+
+impl Display for ApiError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Reqwest(e) => write!(f, "Reqwest error: {e}"),
+            Self::Serde(e) => write!(f, "Serde error: {e}"),
+        }
+    }
+}
+
+impl std::error::Error for ApiError {}

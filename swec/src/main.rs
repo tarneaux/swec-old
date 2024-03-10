@@ -12,8 +12,10 @@ use tokio::{
 mod api;
 mod ringbuffer;
 pub use ringbuffer::{RingBuffer, StatusRingBuffer};
-use swec_core::watcher;
+use swec_core::{watcher, ApiInfo};
 use tracing::{info, warn};
+
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -21,6 +23,8 @@ async fn main() -> Result<()> {
     let watchers_path = Path::new("watchers.json");
     let history_len = 3600;
     let truncate_histories = false;
+    let public_address = "127.0.0.1:8080";
+    let private_address = "127.0.0.1:8081";
 
     tracing_subscriber::fmt::init();
 
@@ -41,14 +45,26 @@ async fn main() -> Result<()> {
 
     let public_router = Router::new()
         .nest("/api/v1", api::read_only_router())
-        .with_state(app_state.clone());
+        .with_state((
+            ApiInfo {
+                writable: false,
+                swec_version: VERSION.to_string(),
+            },
+            app_state.clone(),
+        ));
 
     let private_router = Router::new()
         .nest("/api/v1", api::read_write_router())
-        .with_state(app_state.clone());
+        .with_state((
+            ApiInfo {
+                writable: true,
+                swec_version: VERSION.to_string(),
+            },
+            app_state.clone(),
+        ));
 
-    let public_listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
-    let private_listener = tokio::net::TcpListener::bind("127.0.0.1:8081").await?;
+    let public_listener = tokio::net::TcpListener::bind(public_address).await?;
+    let private_listener = tokio::net::TcpListener::bind(private_address).await?;
 
     let public_server =
         axum::serve(public_listener, public_router.into_make_service()).into_future();

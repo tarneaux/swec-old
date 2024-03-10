@@ -11,11 +11,12 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use swec_core::watcher;
+use swec_core::{watcher, ApiInfo};
 
 // The read-only API.
-pub fn read_only_router() -> axum::Router<Arc<RwLock<AppState>>> {
+pub fn read_only_router() -> axum::Router<(ApiInfo, Arc<RwLock<AppState>>)> {
     axum::Router::new()
+        .route("/info", get(get_api_info))
         .route("/watchers", get(get_watchers))
         .route("/watchers/:name", get(get_watcher))
         .route("/watchers/:name/spec", get(get_watcher_spec))
@@ -24,7 +25,7 @@ pub fn read_only_router() -> axum::Router<Arc<RwLock<AppState>>> {
 }
 
 // The read-write API.
-pub fn read_write_router() -> axum::Router<Arc<RwLock<AppState>>> {
+pub fn read_write_router() -> axum::Router<(ApiInfo, Arc<RwLock<AppState>>)> {
     read_only_router()
         .route("/watchers/:name", delete(delete_watcher))
         .route("/watchers/:name/spec", post(post_watcher_spec))
@@ -50,8 +51,14 @@ impl AppState {
     }
 }
 
+pub async fn get_api_info(
+    State((api_info, _)): State<(ApiInfo, Arc<RwLock<AppState>>)>,
+) -> Json<ApiInfo> {
+    Json(api_info)
+}
+
 pub async fn get_watchers(
-    State(app_state): State<Arc<RwLock<AppState>>>,
+    State((_, app_state)): State<(ApiInfo, Arc<RwLock<AppState>>)>,
 ) -> (
     StatusCode,
     Json<BTreeMap<String, watcher::Watcher<StatusRingBuffer>>>,
@@ -61,7 +68,7 @@ pub async fn get_watchers(
 }
 
 pub async fn get_watcher(
-    State(app_state): State<Arc<RwLock<AppState>>>,
+    State((_, app_state)): State<(ApiInfo, Arc<RwLock<AppState>>)>,
     Path(name): Path<String>,
 ) -> (StatusCode, Json<Option<watcher::Watcher<StatusRingBuffer>>>) {
     app_state.read().await.watchers.get(&name).map_or_else(
@@ -71,7 +78,7 @@ pub async fn get_watcher(
 }
 
 pub async fn delete_watcher(
-    State(app_state): State<Arc<RwLock<AppState>>>,
+    State((_, app_state)): State<(ApiInfo, Arc<RwLock<AppState>>)>,
     Path(name): Path<String>,
 ) -> (StatusCode, Json<Option<watcher::Watcher<StatusRingBuffer>>>) {
     app_state.write().await.watchers.remove(&name).map_or_else(
@@ -81,7 +88,7 @@ pub async fn delete_watcher(
 }
 
 pub async fn get_watcher_spec(
-    State(app_state): State<Arc<RwLock<AppState>>>,
+    State((_, app_state)): State<(ApiInfo, Arc<RwLock<AppState>>)>,
     Path(name): Path<String>,
 ) -> (StatusCode, Json<Option<watcher::Spec>>) {
     app_state.read().await.watchers.get(&name).map_or_else(
@@ -91,7 +98,7 @@ pub async fn get_watcher_spec(
 }
 
 pub async fn post_watcher_spec(
-    State(app_state): State<Arc<RwLock<AppState>>>,
+    State((_, app_state)): State<(ApiInfo, Arc<RwLock<AppState>>)>,
     Path(name): Path<String>,
     Json(spec): Json<watcher::Spec>,
 ) -> (StatusCode, Json<Option<watcher::Spec>>) {
@@ -106,7 +113,7 @@ pub async fn post_watcher_spec(
 }
 
 pub async fn put_watcher_spec(
-    State(app_state): State<Arc<RwLock<AppState>>>,
+    State((_, app_state)): State<(ApiInfo, Arc<RwLock<AppState>>)>,
     Path(name): Path<String>,
     Json(spec): Json<watcher::Spec>,
 ) -> (StatusCode, Json<Option<watcher::Spec>>) {
@@ -120,7 +127,7 @@ pub async fn put_watcher_spec(
 }
 
 pub async fn get_watcher_statuses(
-    State(app_state): State<Arc<RwLock<AppState>>>,
+    State((_, app_state)): State<(ApiInfo, Arc<RwLock<AppState>>)>,
     Path(name): Path<String>,
 ) -> (
     StatusCode,
@@ -138,7 +145,7 @@ pub async fn get_watcher_statuses(
 }
 
 pub async fn get_watcher_status(
-    State(app_state): State<Arc<RwLock<AppState>>>,
+    State((_, app_state)): State<(ApiInfo, Arc<RwLock<AppState>>)>,
     Path((name, index)): Path<(String, usize)>,
 ) -> (StatusCode, Json<Option<(DateTime<Local>, watcher::Status)>>) {
     app_state.read().await.watchers.get(&name).map_or_else(
@@ -153,7 +160,7 @@ pub async fn get_watcher_status(
 }
 
 pub async fn post_watcher_status(
-    State(app_state): State<Arc<RwLock<AppState>>>,
+    State((_, app_state)): State<(ApiInfo, Arc<RwLock<AppState>>)>,
     Path(name): Path<String>,
     Json(status): Json<watcher::Status>,
 ) -> (StatusCode, Json<Option<watcher::Status>>) {

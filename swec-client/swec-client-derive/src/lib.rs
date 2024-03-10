@@ -12,6 +12,9 @@ pub fn read_api_derive(input: TokenStream) -> TokenStream {
     let name = &ast.ident;
     let gen = quote! {
         impl ReadApi for #name {
+            async fn get_info(&self) -> Result<ApiInfo, ApiError> {
+                api_query!(get, format!("{}/info", self.base_url), true)
+            }
             async fn get_watchers(&self) -> Result<BTreeMap<String, Watcher<VecBuffer>>, ApiError> {
                 api_query!(get, format!("{}/watchers", self.base_url), true)
             }

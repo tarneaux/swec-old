@@ -1,7 +1,7 @@
 use clap::Parser;
 use std::str::FromStr;
 use swec_client::{ReadApi, WriteApi};
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 #[tokio::main]
 async fn main() {
@@ -17,14 +17,34 @@ async fn main() {
             Checker::Http { url } => Some(url.to_string()),
         },
     };
+
+    let api_info = client.get_info().await.unwrap_or_else(|e| {
+        error!("Failed to get API info: {e}");
+        error!("Is this a valid SWEC API? Exiting.");
+        std::process::exit(1);
+    });
+
+    if !api_info.writable {
+        error!("This API endpoint, while being a valid SWEC API, is not writable. Exiting.");
+        std::process::exit(1);
+    }
+
     if client.get_watcher(&args.name).await.is_err() {
         info!("Watcher does not exist. Sending POST request to create it");
-        client.post_watcher_spec(&args.name, spec).await.unwrap();
+        client
+            .post_watcher_spec(&args.name, spec)
+            .await
+            .unwrap_or_else(|e| {
+                error!("Failed to create watcher: {e}");
+                std::process::exit(1);
+            });
     } else {
         info!("Watcher already exists. Sending PUT request to update spec just in case");
         client.put_watcher_spec(&args.name, spec).await.unwrap();
     }
+
     info!("Starting main loop");
+
     loop {
         debug!("Checking {}", args.name);
         let status = args.checker.check(args.timeout).await;
@@ -33,7 +53,7 @@ async fn main() {
             .post_watcher_status(&args.name, status)
             .await
             .unwrap_or_else(|e| {
-                warn!("Failed to post status: {e:?}");
+                warn!("Failed to post status: {e}, ignoring.");
             });
         debug!("Sleeping for {} seconds", args.interval);
         tokio::time::sleep(tokio::time::Duration::from_secs(args.interval)).await;
