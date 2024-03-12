@@ -172,10 +172,10 @@ pub async fn get_watcher_ws(
 ) -> impl IntoResponse {
     let rx = app_state.read().await.get_watcher_receiver(&name);
 
-    match rx {
-        Ok(rx) => ws.on_upgrade(move |socket| handle_ws(socket, rx)),
-        Err(_) => StatusCode::NOT_FOUND.into_response(), // TODO: Is this how it should be done?
-    }
+    rx.map_or_else(
+        |_| StatusCode::NOT_FOUND.into_response(), // TODO: Is this how it should be done?
+        |rx| ws.on_upgrade(move |socket| handle_ws(socket, rx)),
+    )
 }
 
 pub async fn handle_ws(socket: WebSocket, rx: tokio::sync::broadcast::Receiver<ApiMessage>) {

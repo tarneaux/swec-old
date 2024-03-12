@@ -12,3 +12,8 @@ reqwest = { version = "0.11.24", features = ["json"] }
 chrono = "0.4.34"
 serde_json = "1.0.114"
 async-trait = "0.1.77"
+tokio-tungstenite = { version = "0.21.0", features = ["native-tls-crate"] }
+futures-util = "0.3.30"
+tokio = "1.36.0"
+tracing = "0.1.40"
+clap = { version = "4.5.2", features = ["derive"] }

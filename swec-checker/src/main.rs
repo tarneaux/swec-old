@@ -1,6 +1,6 @@
 use clap::Parser;
 use std::str::FromStr;
-use swec_client::{ReadApi, WriteApi};
+use swec_client::{Api, ReadApi, WriteApi};
 use tracing::{debug, error, info, warn};
 
 #[tokio::main]
@@ -8,7 +8,10 @@ async fn main() {
     tracing_subscriber::fmt::init();
     let args = Args::parse();
     info!("Starting watcher: {}", args.name);
-    let client = swec_client::ReadWrite::new(args.api_url.clone());
+    let client = swec_client::ReadWrite::new(args.api_url.clone()).unwrap_or_else(|e| {
+        error!("Failed to create API client: {e}");
+        std::process::exit(1);
+    });
     debug!("API client created. API URL: {}", args.api_url);
     debug!("Checking if watcher exists");
     let spec = swec_core::Spec {
