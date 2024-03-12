@@ -98,6 +98,16 @@ impl Spec {
     }
 }
 
+impl Display for Spec {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.description)?;
+        if let Some(url) = &self.url {
+            write!(f, " ({url})")?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Status {
     /// Whether the service is up or down
