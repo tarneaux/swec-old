@@ -141,6 +141,7 @@ pub trait ReadApi: Api {
             true
         )
     }
+
     async fn watch_watcher(
         &self,
         name: &str,
