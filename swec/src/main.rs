@@ -131,9 +131,8 @@ async fn wait_for_stop_signal() {
     futures::future::select_all(interrupt_futures).await;
 }
 
-async fn save_watchers(path: &Path, watchers: String) -> Result<()> {
+async fn save_watchers(path: &Path, serialized: String) -> Result<()> {
     let mut file = tokio::fs::File::create(path).await?;
-    let serialized = serde_json::to_string(&watchers)?;
     file.write_all(serialized.as_bytes()).await?;
     Ok(())
 }
