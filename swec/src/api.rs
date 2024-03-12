@@ -10,7 +10,10 @@ use axum::{
     Json,
 };
 use chrono::{DateTime, Local};
+use futures::stream::SplitSink;
+use futures::{SinkExt, StreamExt};
 use std::collections::BTreeMap;
+use std::error::Error;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_stream::wrappers::BroadcastStream;
@@ -18,7 +21,7 @@ use tracing::warn;
 
 use swec_core::{watcher, ApiInfo, ApiMessage};
 
-pub use state::AppState;
+pub use watcher_with_sender::WatcherWithSender;
 
 // The read-only API.
 pub fn read_only_router() -> axum::Router<(ApiInfo, Arc<RwLock<AppState>>)> {
@@ -63,7 +66,7 @@ pub async fn get_watcher(
 ) -> (StatusCode, Json<Option<watcher::Watcher<StatusRingBuffer>>>) {
     app_state.read().await.get_watcher(&name).map_or_else(
         |_| (StatusCode::NOT_FOUND, Json(None)),
-        |watcher| (StatusCode::OK, Json(Some(watcher.clone()))),
+        |watcher| (StatusCode::OK, Json(Some(watcher))),
     )
 }
 
@@ -83,7 +86,7 @@ pub async fn get_watcher_spec(
 ) -> (StatusCode, Json<Option<watcher::Spec>>) {
     app_state.read().await.get_watcher(&name).map_or_else(
         |_| (StatusCode::NOT_FOUND, Json(None)),
-        |watcher| (StatusCode::OK, Json(Some(watcher.spec.clone()))),
+        |watcher| (StatusCode::OK, Json(Some(watcher.spec))),
     )
 }
 
@@ -110,10 +113,13 @@ pub async fn put_watcher_spec(
     app_state
         .write()
         .await
-        .update_watcher_spec(&name, spec.clone())
+        .get_watcher_with_sender_mut(&name)
         .map_or_else(
             |_| (StatusCode::NOT_FOUND, Json(None)),
-            |()| (StatusCode::OK, Json(Some(spec))),
+            |watcher| {
+                watcher.update_spec(spec.clone());
+                (StatusCode::OK, Json(Some(spec)))
+            },
         )
 }
 
@@ -126,12 +132,7 @@ pub async fn get_watcher_statuses(
 ) {
     app_state.read().await.get_watcher(&name).map_or_else(
         |_| (StatusCode::NOT_FOUND, Json(None)),
-        |watcher| {
-            (
-                StatusCode::OK,
-                Json(Some(watcher.statuses.clone().collect())),
-            )
-        },
+        |watcher| (StatusCode::OK, Json(Some(watcher.statuses.collect()))),
     )
 }
 
@@ -158,10 +159,13 @@ pub async fn post_watcher_status(
     app_state
         .write()
         .await
-        .add_status(&name, status.clone())
+        .get_watcher_with_sender_mut(&name)
         .map_or_else(
             |_| (StatusCode::NOT_FOUND, Json(None)),
-            |()| (StatusCode::CREATED, Json(Some(status))),
+            |w| {
+                w.add_status(status.clone());
+                (StatusCode::CREATED, Json(Some(status)))
+            },
         )
 }
 
@@ -170,25 +174,63 @@ pub async fn get_watcher_ws(
     State((_, app_state)): State<(ApiInfo, Arc<RwLock<AppState>>)>,
     Path(name): Path<String>,
 ) -> impl IntoResponse {
-    let rx = app_state.read().await.get_watcher_receiver(&name);
+    // The `Initial` message we send is meant to avoid race conditions where the client would first
+    // ask for the current state and then subscribe to updates. This way, the client can just
+    // subscribe and get the current state in one go.
+    // The fact that we subscribe and create the `Initial` message in the same atomic operation is
+    // important to make sure there is no race condition here.
+    let res = app_state
+        .read()
+        .await
+        .get_watcher_with_sender(&name)
+        .map(|w| {
+            (
+                w.subscribe(),
+                ApiMessage::Initial(
+                    w.watcher().spec.clone(),
+                    w.watcher().statuses.iter().next_back().cloned(),
+                ),
+            )
+        });
 
-    rx.map_or_else(
-        |_| StatusCode::NOT_FOUND.into_response(), // TODO: Is this how it should be done?
-        |rx| ws.on_upgrade(move |socket| handle_ws(socket, rx)),
-    )
+    match res {
+        Ok((rx, initial_message)) => {
+            ws.on_upgrade(move |socket| handle_ws(socket, rx, initial_message))
+        }
+        Err(_) => StatusCode::NOT_FOUND.into_response(),
+    }
 }
 
-pub async fn handle_ws(socket: WebSocket, rx: tokio::sync::broadcast::Receiver<ApiMessage>) {
-    use futures::{SinkExt, StreamExt};
-    let (mut tx, _) = socket.split();
+pub async fn handle_ws(
+    socket: WebSocket,
+    broadcast_rx: tokio::sync::broadcast::Receiver<ApiMessage>,
+    initial_message: ApiMessage,
+) {
+    async fn send(
+        tx: &mut SplitSink<WebSocket, Message>,
+        msg: ApiMessage,
+    ) -> Result<(), Box<dyn Error>> {
+        let msg = serde_json::to_string(&msg)?;
+        tx.send(Message::Text(msg)).await?;
+        Ok(())
+    }
 
-    let mut rx = BroadcastStream::new(rx);
+    let (mut socket_tx, _) = socket.split();
 
-    while let Some(msg) = rx.next().await {
+    let mut broadcast_rx = BroadcastStream::new(broadcast_rx);
+
+    send(&mut socket_tx, initial_message)
+        .await
+        .unwrap_or_else(|e| {
+            warn!(target: "websockets", "Failed to send initial message: {e}");
+        });
+
+    while let Some(msg) = broadcast_rx.next().await {
         match msg {
             Ok(msg) => {
-                let msg = serde_json::to_string(&msg).unwrap();
-                tx.send(Message::Text(msg)).await.unwrap();
+                if let Err(e) = send(&mut socket_tx, msg).await {
+                    warn!(target: "websockets", "Failed to send message: {e}");
+                }
             }
             Err(e) => {
                 warn!(target: "websockets", "Failed to receive message: {e}");
@@ -197,134 +239,142 @@ pub async fn handle_ws(socket: WebSocket, rx: tokio::sync::broadcast::Receiver<A
     }
 }
 
-mod state {
+pub struct AppState {
+    watchers: BTreeMap<String, WatcherWithSender>,
+    history_len: usize,
+}
+
+impl AppState {
+    pub fn new(
+        watchers: BTreeMap<String, watcher::Watcher<StatusRingBuffer>>,
+        history_len: usize,
+    ) -> Self {
+        Self {
+            watchers: watchers
+                .into_iter()
+                .map(|(k, v)| (k, WatcherWithSender::new(v)))
+                .collect(),
+            history_len,
+        }
+    }
+
+    pub fn add_watcher(
+        &mut self,
+        name: String,
+        watcher_spec: watcher::Spec,
+    ) -> Result<(), WatcherAlreadyExists> {
+        if self.watchers.contains_key(&name) {
+            return Err(WatcherAlreadyExists);
+        }
+        self.watchers.insert(
+            name,
+            WatcherWithSender::new(watcher::Watcher::new(
+                watcher_spec,
+                StatusRingBuffer::new(self.history_len),
+            )),
+        );
+        Ok(())
+    }
+
+    pub fn remove_watcher(
+        &mut self,
+        name: &str,
+    ) -> Result<watcher::Watcher<StatusRingBuffer>, WatcherDoesNotExist> {
+        // TODO: do we need to make sure all websockets are closed?
+        //       => method in WatcherWithSender to close all websockets gracefully with a message
+        self.watchers
+            .remove(name)
+            .map(|w| w.watcher().clone())
+            .ok_or(WatcherDoesNotExist)
+    }
+
+    pub fn get_watcher(
+        &self,
+        name: &str,
+    ) -> Result<watcher::Watcher<StatusRingBuffer>, WatcherDoesNotExist> {
+        self.get_watcher_with_sender(name)
+            .map(|w| w.watcher().clone())
+    }
+
+    pub fn get_watcher_with_sender(
+        &self,
+        name: &str,
+    ) -> Result<&WatcherWithSender, WatcherDoesNotExist> {
+        self.watchers.get(name).ok_or(WatcherDoesNotExist)
+    }
+
+    pub fn get_watcher_with_sender_mut(
+        &mut self,
+        name: &str,
+    ) -> Result<&mut WatcherWithSender, WatcherDoesNotExist> {
+        self.watchers.get_mut(name).ok_or(WatcherDoesNotExist)
+    }
+
+    pub fn get_watchers(&self) -> BTreeMap<String, watcher::Watcher<StatusRingBuffer>> {
+        self.watchers
+            .iter()
+            .map(|(k, v)| (k.clone(), v.watcher().clone()))
+            .collect()
+    }
+
+    pub fn watchers_to_json(&self) -> Result<String, serde_json::Error> {
+        let watchers: BTreeMap<String, watcher::Watcher<StatusRingBuffer>> = self
+            .watchers
+            .iter()
+            .map(|(k, v)| (k.clone(), v.watcher().clone()))
+            .collect();
+        serde_json::to_string(&watchers)
+    }
+}
+
+#[derive(Debug)]
+pub struct WatcherAlreadyExists;
+#[derive(Debug)]
+pub struct WatcherDoesNotExist;
+
+mod watcher_with_sender {
     use super::StatusRingBuffer;
     use chrono::Local;
-    use std::collections::BTreeMap;
     use swec_core::watcher;
     use swec_core::ApiMessage;
     use tracing::{debug, warn};
 
-    pub struct AppState {
-        watchers: BTreeMap<
-            String,
-            (
-                watcher::Watcher<StatusRingBuffer>,
-                tokio::sync::broadcast::Sender<ApiMessage>,
-            ),
-        >,
-        pub history_len: usize,
+    #[derive(Debug)]
+    /// Encapsulates a `watcher::Watcher` with a `tokio::sync::broadcast::Sender` to send updates
+    /// to subscribers. This needs to be in a separate module for the privacy of the inner fields
+    /// (to that we don't modify a watcher without sending an update).
+    pub struct WatcherWithSender {
+        watcher: watcher::Watcher<StatusRingBuffer>,
+        sender: tokio::sync::broadcast::Sender<ApiMessage>,
     }
 
-    impl AppState {
-        pub fn new(
-            watchers: BTreeMap<String, watcher::Watcher<StatusRingBuffer>>,
-            history_len: usize,
-        ) -> Self {
-            Self {
-                watchers: watchers
-                    .into_iter()
-                    .map(|(k, v)| (k, (v, tokio::sync::broadcast::channel(1).0)))
-                    .collect(),
-                history_len,
+    impl WatcherWithSender {
+        pub fn new(watcher: watcher::Watcher<StatusRingBuffer>) -> Self {
+            let (sender, _) = tokio::sync::broadcast::channel(1); // TODO: what should the capacity be? allow changing it?
+            Self { watcher, sender }
+        }
+
+        pub const fn watcher(&self) -> &watcher::Watcher<StatusRingBuffer> {
+            &self.watcher
+        }
+
+        pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<ApiMessage> {
+            self.sender.subscribe()
+        }
+
+        pub fn update_spec(&mut self, spec: watcher::Spec) {
+            self.watcher.spec = spec.clone();
+            if let Err(e) = self.sender.send(ApiMessage::UpdatedSpec(spec)) {
+                warn!(target: "websockets", "Failed to send updated spec: {e}, ignoring.");
             }
         }
 
-        pub fn add_watcher(
-            &mut self,
-            name: String,
-            watcher_spec: watcher::Spec,
-        ) -> Result<(), WatcherAlreadyExists> {
-            if self.watchers.contains_key(&name) {
-                return Err(WatcherAlreadyExists);
-            }
-            self.watchers.insert(
-                name,
-                (
-                    watcher::Watcher::new(watcher_spec, StatusRingBuffer::new(self.history_len)),
-                    tokio::sync::broadcast::channel(1).0,
-                ),
-            );
-            Ok(())
-        }
-
-        pub fn remove_watcher(
-            &mut self,
-            name: &str,
-        ) -> Result<watcher::Watcher<StatusRingBuffer>, WatcherDoesNotExist> {
-            // TODO: do we need to make sure all websockets are closed?
-            self.watchers
-                .remove(name)
-                .map(|(watcher, _)| watcher)
-                .ok_or(WatcherDoesNotExist)
-        }
-
-        pub fn update_watcher_spec(
-            &mut self,
-            name: &str,
-            watcher_spec: watcher::Spec,
-        ) -> Result<(), WatcherDoesNotExist> {
-            match self.watchers.get_mut(name) {
-                Some(v) => {
-                    v.0.spec = watcher_spec.clone();
-                    if let Err(e) = v.1.send(ApiMessage::UpdatedSpec(watcher_spec)) {
-                        warn!(target: "websockets", "Failed to send updated spec: {e}, ignoring.");
-                    }
-                }
-                None => return Err(WatcherDoesNotExist),
-            }
-
-            Ok(())
-        }
-
-        pub fn add_status(
-            &mut self,
-            name: &str,
-            status: watcher::Status,
-        ) -> Result<(), WatcherDoesNotExist> {
+        pub fn add_status(&mut self, status: watcher::Status) {
             let time = Local::now();
-            match self.watchers.get_mut(name) {
-                Some(v) => {
-                    v.0.statuses.push((time, status.clone()));
-                    if let Err(e) = v.1.send(ApiMessage::AddedStatus(time, status)) {
-                        debug!(target: "websockets", "Failed to send added status: {e}, ignoring since this only means there are no websockets open.");
-                    }
-                    Ok(())
-                }
-                None => Err(WatcherDoesNotExist),
+            self.watcher.statuses.push((time, status.clone()));
+            if let Err(e) = self.sender.send(ApiMessage::AddedStatus(time, status)) {
+                debug!(target: "websockets", "Failed to send added status: {e}, ignoring.");
             }
         }
-
-        pub fn get_watcher(
-            &self,
-            name: &str,
-        ) -> Result<&watcher::Watcher<StatusRingBuffer>, WatcherDoesNotExist> {
-            self.watchers
-                .get(name)
-                .map(|(watcher, _)| watcher)
-                .ok_or(WatcherDoesNotExist)
-        }
-
-        pub fn get_watchers(&self) -> BTreeMap<String, watcher::Watcher<StatusRingBuffer>> {
-            self.watchers
-                .iter()
-                .map(|(k, (v, _))| (k.clone(), v.clone()))
-                .collect()
-        }
-
-        pub fn get_watcher_receiver(
-            &self,
-            name: &str,
-        ) -> Result<tokio::sync::broadcast::Receiver<ApiMessage>, WatcherDoesNotExist> {
-            self.watchers
-                .get(name)
-                .ok_or(WatcherDoesNotExist)
-                .map(|(_, rx)| rx.subscribe())
-        }
     }
-
-    #[derive(Debug)]
-    pub struct WatcherAlreadyExists;
-    #[derive(Debug)]
-    pub struct WatcherDoesNotExist;
 }

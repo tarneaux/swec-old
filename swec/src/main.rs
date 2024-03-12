@@ -95,7 +95,12 @@ async fn main() -> Result<()> {
     info!("{end_message}");
 
     info!("Saving watchers to file");
-    save_watchers(watchers_path, app_state.read().await.get_watchers().clone()).await?;
+
+    let res = app_state.read().await.watchers_to_json();
+    match res {
+        Ok(json) => save_watchers(watchers_path, json).await?,
+        Err(e) => warn!("Failed to save watchers to file: {e}"),
+    }
 
     Ok(())
 }
@@ -126,10 +131,7 @@ async fn wait_for_stop_signal() {
     futures::future::select_all(interrupt_futures).await;
 }
 
-async fn save_watchers(
-    path: &Path,
-    watchers: BTreeMap<String, watcher::Watcher<StatusRingBuffer>>,
-) -> Result<()> {
+async fn save_watchers(path: &Path, watchers: String) -> Result<()> {
     let mut file = tokio::fs::File::create(path).await?;
     let serialized = serde_json::to_string(&watchers)?;
     file.write_all(serialized.as_bytes()).await?;

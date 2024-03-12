@@ -1,4 +1,4 @@
-use crate::watcher;
+use crate::{watcher, Spec};
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 
@@ -12,4 +12,5 @@ pub struct Info {
 pub enum Message {
     UpdatedSpec(watcher::Spec),
     AddedStatus(DateTime<Local>, watcher::Status),
+    Initial(Spec, Option<(DateTime<Local>, watcher::Status)>),
 }
