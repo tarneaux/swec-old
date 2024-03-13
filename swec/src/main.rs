@@ -13,7 +13,7 @@ use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 mod api;
 mod ringbuffer;
 pub use ringbuffer::{RingBuffer, StatusRingBuffer};
-use swec_core::{watcher, ApiInfo};
+use swec_core::{checker, ApiInfo};
 use tracing::{info, warn};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -21,7 +21,7 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[tokio::main]
 async fn main() -> Result<()> {
     // TODO: config file and/or command line arguments
-    let watchers_path = Path::new("watchers.json");
+    let checkers_path = Path::new("checkers.json");
     let history_len = 3600;
     let truncate_histories = false;
     let public_address = "127.0.0.1:8080";
@@ -30,17 +30,17 @@ async fn main() -> Result<()> {
 
     tracing_subscriber::fmt::init();
 
-    info!("Restoring watchers from file");
+    info!("Restoring checkers from file");
 
-    let watchers = load_watchers(watchers_path, history_len, truncate_histories)
+    let checkers = load_checkers(checkers_path, history_len, truncate_histories)
         .await
         .unwrap_or_else(|e| {
-            warn!("Failed to restore watchers from file: {e}");
-            warn!("Starting with an empty set of watchers");
+            warn!("Failed to restore checkers from file: {e}");
+            warn!("Starting with an empty set of checkers");
             BTreeMap::new()
         });
 
-    let app_state = Arc::new(RwLock::new(api::AppState::new(watchers, history_len)));
+    let app_state = Arc::new(RwLock::new(api::AppState::new(checkers, history_len)));
 
     let public_server = {
         let router = Router::new()
@@ -94,12 +94,12 @@ async fn main() -> Result<()> {
 
     info!("{end_message}");
 
-    info!("Saving watchers to file");
+    info!("Saving checkers to file");
 
-    let res = app_state.read().await.watchers_to_json();
+    let res = app_state.read().await.checkers_to_json();
     match res {
-        Ok(json) => save_watchers(watchers_path, json).await?,
-        Err(e) => warn!("Failed to save watchers to file: {e}"),
+        Ok(json) => save_checkers(checkers_path, json).await?,
+        Err(e) => warn!("Failed to save checkers to file: {e}"),
     }
 
     Ok(())
@@ -131,31 +131,31 @@ async fn wait_for_stop_signal() {
     futures::future::select_all(interrupt_futures).await;
 }
 
-async fn save_watchers(path: &Path, serialized: String) -> Result<()> {
+async fn save_checkers(path: &Path, serialized: String) -> Result<()> {
     let mut file = tokio::fs::File::create(path).await?;
     file.write_all(serialized.as_bytes()).await?;
     Ok(())
 }
 
-async fn load_watchers(
+async fn load_checkers(
     path: &Path,
     history_length: usize,
     truncate: bool,
-) -> Result<BTreeMap<String, watcher::Watcher<StatusRingBuffer>>> {
+) -> Result<BTreeMap<String, checker::Checker<StatusRingBuffer>>> {
     let mut file = tokio::fs::File::open(path).await?;
     let mut contents = Vec::new();
     file.read_to_end(&mut contents).await?;
-    let mut deserialized: BTreeMap<String, watcher::Watcher<StatusRingBuffer>> =
+    let mut deserialized: BTreeMap<String, checker::Checker<StatusRingBuffer>> =
         serde_json::from_slice(&contents)?;
     // Make sure the histories are all the correct length
-    for watcher in deserialized.values_mut() {
+    for checker in deserialized.values_mut() {
         if truncate {
-            watcher.statuses.truncate_fifo(history_length);
+            checker.statuses.truncate_fifo(history_length);
         } else {
-            watcher
+            checker
                 .statuses
                 .resize(history_length)
-                .expect("Failed to resize watcher history");
+                .expect("Failed to resize checker history");
         }
     }
     Ok(deserialized)

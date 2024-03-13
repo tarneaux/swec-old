@@ -16,7 +16,7 @@ impl<T> RingBuffer<T> {
     /// Create a new ring buffer of the given capacity.
     /// # Example
     /// ```
-    /// use swec::watcher::RingBuffer;
+    /// use swec::checker::RingBuffer;
     /// let rb = RingBuffer::<i32>::new(5);
     /// assert_eq!(rb.capacity(), 5);
     /// ```
@@ -31,7 +31,7 @@ impl<T> RingBuffer<T> {
     /// Add an element to the ring buffer, overwriting the oldest element if full.
     /// # Example
     /// ```
-    /// # use swec::watcher::RingBuffer;
+    /// # use swec::checker::RingBuffer;
     /// let mut rb = RingBuffer::<i32>::new(1);
     /// rb.push(1);
     /// rb.push(2);
@@ -47,7 +47,7 @@ impl<T> RingBuffer<T> {
     /// Add multiple elements to the ring buffer, overwriting the oldest elements if full.
     /// # Example
     /// ```
-    /// # use swec::watcher::RingBuffer;
+    /// # use swec::checker::RingBuffer;
     /// let mut rb = RingBuffer::<i32>::new(3);
     /// rb.push_multiple(1..=10);
     /// assert_eq!(rb.iter().copied().collect::<Vec<_>>(), vec![8, 9, 10]);
@@ -62,7 +62,7 @@ impl<T> RingBuffer<T> {
     /// The first element is the oldest, and the last element is the newest.
     /// # Example
     /// ```
-    /// # use swec::watcher::RingBuffer;
+    /// # use swec::checker::RingBuffer;
     /// let mut rb = RingBuffer::<i32>::new(3);
     /// rb.push_multiple(1..=10);
     /// let iter = rb.iter();
@@ -96,7 +96,7 @@ impl<T> RingBuffer<T> {
     /// Also grows the buffer to the new capacity if necessary.
     /// # Example
     /// ```
-    /// # use swec::watcher::RingBuffer;
+    /// # use swec::checker::RingBuffer;
     /// let mut rb = RingBuffer::<i32>::new(3);
     /// rb.resize(5).unwrap();
     /// rb.resize(4).unwrap_err(); // Does nothing
@@ -122,7 +122,7 @@ impl<T> RingBuffer<T> {
     /// Also shrinks or grows the buffer to the new capacity if needed.
     /// # Example
     /// ```
-    /// # use swec::watcher::RingBuffer;
+    /// # use swec::checker::RingBuffer;
     /// let mut rb = RingBuffer::<i32>::new(3);
     /// rb.truncate_fifo(5);
     /// rb.push_multiple(1..=10);

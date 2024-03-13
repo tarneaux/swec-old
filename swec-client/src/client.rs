@@ -4,7 +4,7 @@ use futures_util::StreamExt;
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
-use swec_core::{ApiInfo, ApiMessage, Spec, Status, VecBuffer, Watcher};
+use swec_core::{ApiInfo, ApiMessage, Spec, Status, VecBuffer, Checker};
 use tokio::sync::mpsc::Sender;
 use tokio::task::JoinHandle;
 use tokio_tungstenite::connect_async;
@@ -107,48 +107,48 @@ pub trait ReadApi: Api {
         api_query!(get, format!("{}/info", self.base_url()), true)
     }
 
-    async fn get_watchers(&self) -> Result<BTreeMap<String, Watcher<VecBuffer>>, ApiError> {
-        api_query!(get, format!("{}/watchers", self.base_url()), true)
+    async fn get_checkers(&self) -> Result<BTreeMap<String, Checker<VecBuffer>>, ApiError> {
+        api_query!(get, format!("{}/checkers", self.base_url()), true)
     }
 
-    async fn get_watcher(&self, name: &str) -> Result<Watcher<VecBuffer>, ApiError> {
-        api_query!(get, format!("{}/watchers/{}", self.base_url(), name), true)
+    async fn get_checker(&self, name: &str) -> Result<Checker<VecBuffer>, ApiError> {
+        api_query!(get, format!("{}/checkers/{}", self.base_url(), name), true)
     }
 
-    async fn get_watcher_spec(&self, name: &str) -> Result<Spec, ApiError> {
+    async fn get_checker_spec(&self, name: &str) -> Result<Spec, ApiError> {
         api_query!(
             get,
-            format!("{}/watchers/{}/spec", self.base_url(), name),
+            format!("{}/checkers/{}/spec", self.base_url(), name),
             true
         )
     }
 
-    async fn get_watcher_statuses(
+    async fn get_checker_statuses(
         &self,
         name: &str,
     ) -> Result<Vec<(DateTime<Local>, Status)>, ApiError> {
         api_query!(
             get,
-            format!("{}/watchers/{}/statuses", self.base_url(), name),
+            format!("{}/checkers/{}/statuses", self.base_url(), name),
             true
         )
     }
 
-    async fn get_watcher_status(&self, name: &str, n: u32) -> Result<Status, ApiError> {
+    async fn get_checker_status(&self, name: &str, n: u32) -> Result<Status, ApiError> {
         api_query!(
             get,
-            format!("{}/watchers/{}/statuses/{}", self.base_url(), name, n),
+            format!("{}/checkers/{}/statuses/{}", self.base_url(), name, n),
             true
         )
     }
 
-    async fn watch_watcher(
+    async fn watch_checker(
         &self,
         name: &str,
         channel: Sender<ApiMessage>,
     ) -> Result<JoinHandle<()>, WsError> {
         let (ws_stream, _) =
-            connect_async(format!("{}/watchers/{}/watch", self.ws_base_url(), name)).await?;
+            connect_async(format!("{}/checkers/{}/watch", self.ws_base_url(), name)).await?;
         let (_, mut read) = ws_stream.split();
 
         // Spawn a new task that will forward messages from the websocket to the channel
@@ -176,33 +176,33 @@ pub trait ReadApi: Api {
 
 #[async_trait]
 pub trait WriteApi: Api {
-    async fn delete_watcher(&self, name: &str) -> Result<(), ApiError> {
+    async fn delete_checker(&self, name: &str) -> Result<(), ApiError> {
         api_query!(
             delete,
-            format!("{}/watchers/{}", self.base_url(), name),
+            format!("{}/checkers/{}", self.base_url(), name),
             false
         )
     }
-    async fn post_watcher_spec(&self, name: &str, spec: Spec) -> Result<(), ApiError> {
+    async fn post_checker_spec(&self, name: &str, spec: Spec) -> Result<(), ApiError> {
         api_query!(
             post,
-            format!("{}/watchers/{}/spec", self.base_url(), name),
+            format!("{}/checkers/{}/spec", self.base_url(), name),
             false,
             spec
         )
     }
-    async fn put_watcher_spec(&self, name: &str, spec: Spec) -> Result<(), ApiError> {
+    async fn put_checker_spec(&self, name: &str, spec: Spec) -> Result<(), ApiError> {
         api_query!(
             put,
-            format!("{}/watchers/{}/spec", self.base_url(), name),
+            format!("{}/checkers/{}/spec", self.base_url(), name),
             false,
             spec
         )
     }
-    async fn post_watcher_status(&self, name: &str, status: Status) -> Result<(), ApiError> {
+    async fn post_checker_status(&self, name: &str, status: Status) -> Result<(), ApiError> {
         api_query!(
             post,
-            format!("{}/watchers/{}/statuses", self.base_url(), name),
+            format!("{}/checkers/{}/statuses", self.base_url(), name),
             false,
             status
         )

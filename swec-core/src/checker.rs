@@ -5,16 +5,16 @@ use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 
 #[derive(Debug, Clone)]
-pub struct Watcher<Buffer: StatusBuffer> {
+pub struct Checker<Buffer: StatusBuffer> {
     /// Information about the service, for humans
     pub spec: Spec,
     /// Status history of the service
     pub statuses: Buffer,
 }
 
-impl<Buffer: StatusBuffer> Watcher<Buffer> {
+impl<Buffer: StatusBuffer> Checker<Buffer> {
     #[must_use]
-    /// Create a new watcher with an empty history.
+    /// Create a new checker with an empty history.
     pub const fn new(spec: Spec, buf: Buffer) -> Self {
         Self {
             spec,
@@ -23,7 +23,7 @@ impl<Buffer: StatusBuffer> Watcher<Buffer> {
     }
 }
 
-impl<Buffer: StatusBuffer> Serialize for Watcher<Buffer> {
+impl<Buffer: StatusBuffer> Serialize for Checker<Buffer> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut map = serializer.serialize_map(Some(2))?;
         map.serialize_entry("spec", &self.spec)?;
@@ -32,9 +32,9 @@ impl<Buffer: StatusBuffer> Serialize for Watcher<Buffer> {
     }
 }
 
-impl<'de, Buffer: StatusBuffer> Deserialize<'de> for Watcher<Buffer> {
+impl<'de, Buffer: StatusBuffer> Deserialize<'de> for Checker<Buffer> {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let deser = deserializer.deserialize_map(WatcherVisitor)?;
+        let deser = deserializer.deserialize_map(CheckerVisitor)?;
         let statuses = deser.statuses;
         let statuses = Buffer::from_vec(statuses);
         Ok(Self {
@@ -44,13 +44,13 @@ impl<'de, Buffer: StatusBuffer> Deserialize<'de> for Watcher<Buffer> {
     }
 }
 
-struct WatcherVisitor;
+struct CheckerVisitor;
 
-impl<'de> Visitor<'de> for WatcherVisitor {
-    type Value = Watcher<VecBuffer>;
+impl<'de> Visitor<'de> for CheckerVisitor {
+    type Value = Checker<VecBuffer>;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("a watcher with its spec and statuses")
+        formatter.write_str("a checker with its spec and statuses")
     }
 
     fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
@@ -78,7 +78,7 @@ impl<'de> Visitor<'de> for WatcherVisitor {
         let spec = spec.ok_or_else(|| serde::de::Error::missing_field("spec"))?;
         let statuses = statuses.ok_or_else(|| serde::de::Error::missing_field("statuses"))?;
         // TODO: conversion
-        Ok(Watcher { spec, statuses })
+        Ok(Checker { spec, statuses })
     }
 }
 

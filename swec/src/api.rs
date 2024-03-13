@@ -19,29 +19,29 @@ use tokio::sync::RwLock;
 use tokio_stream::wrappers::BroadcastStream;
 use tracing::{info, warn};
 
-use swec_core::{watcher, ApiInfo, ApiMessage};
+use swec_core::{checker, ApiInfo, ApiMessage};
 
-pub use watcher_with_sender::WatcherWithSender;
+pub use checker_with_sender::CheckerWithSender;
 
 // The read-only API.
 pub fn read_only_router() -> axum::Router<(ApiInfo, Arc<RwLock<AppState>>)> {
     axum::Router::new()
         .route("/info", get(get_api_info))
-        .route("/watchers", get(get_watchers))
-        .route("/watchers/:name", get(get_watcher))
-        .route("/watchers/:name/spec", get(get_watcher_spec))
-        .route("/watchers/:name/statuses", get(get_watcher_statuses))
-        .route("/watchers/:name/statuses/:index", get(get_watcher_status))
-        .route("/watchers/:name/watch", get(get_watcher_ws))
+        .route("/checkers", get(get_checkers))
+        .route("/checkers/:name", get(get_checker))
+        .route("/checkers/:name/spec", get(get_checker_spec))
+        .route("/checkers/:name/statuses", get(get_checker_statuses))
+        .route("/checkers/:name/statuses/:index", get(get_checker_status))
+        .route("/checkers/:name/watch", get(get_checker_ws))
 }
 
 // The read-write API.
 pub fn read_write_router() -> axum::Router<(ApiInfo, Arc<RwLock<AppState>>)> {
     read_only_router()
-        .route("/watchers/:name", delete(delete_watcher))
-        .route("/watchers/:name/spec", post(post_watcher_spec))
-        .route("/watchers/:name/spec", put(put_watcher_spec))
-        .route("/watchers/:name/statuses", post(post_watcher_status))
+        .route("/checkers/:name", delete(delete_checker))
+        .route("/checkers/:name/spec", post(post_checker_spec))
+        .route("/checkers/:name/spec", put(put_checker_spec))
+        .route("/checkers/:name/statuses", post(post_checker_status))
 }
 
 pub async fn get_api_info(
@@ -50,100 +50,100 @@ pub async fn get_api_info(
     Json(api_info)
 }
 
-pub async fn get_watchers(
+pub async fn get_checkers(
     State((_, app_state)): State<(ApiInfo, Arc<RwLock<AppState>>)>,
 ) -> (
     StatusCode,
-    Json<BTreeMap<String, watcher::Watcher<StatusRingBuffer>>>,
+    Json<BTreeMap<String, checker::Checker<StatusRingBuffer>>>,
 ) {
-    let watchers = app_state.read().await.get_watchers();
-    (StatusCode::OK, Json(watchers))
+    let checkers = app_state.read().await.get_checkers();
+    (StatusCode::OK, Json(checkers))
 }
 
-pub async fn get_watcher(
+pub async fn get_checker(
     State((_, app_state)): State<(ApiInfo, Arc<RwLock<AppState>>)>,
     Path(name): Path<String>,
-) -> (StatusCode, Json<Option<watcher::Watcher<StatusRingBuffer>>>) {
-    app_state.read().await.get_watcher(&name).map_or_else(
+) -> (StatusCode, Json<Option<checker::Checker<StatusRingBuffer>>>) {
+    app_state.read().await.get_checker(&name).map_or_else(
         |_| (StatusCode::NOT_FOUND, Json(None)),
-        |watcher| (StatusCode::OK, Json(Some(watcher))),
+        |checker| (StatusCode::OK, Json(Some(checker))),
     )
 }
 
-pub async fn delete_watcher(
+pub async fn delete_checker(
     State((_, app_state)): State<(ApiInfo, Arc<RwLock<AppState>>)>,
     Path(name): Path<String>,
-) -> (StatusCode, Json<Option<watcher::Watcher<StatusRingBuffer>>>) {
-    app_state.write().await.remove_watcher(&name).map_or_else(
+) -> (StatusCode, Json<Option<checker::Checker<StatusRingBuffer>>>) {
+    app_state.write().await.remove_checker(&name).map_or_else(
         |_| (StatusCode::NOT_FOUND, Json(None)),
-        |watcher| (StatusCode::OK, Json(Some(watcher))),
+        |checker| (StatusCode::OK, Json(Some(checker))),
     )
 }
 
-pub async fn get_watcher_spec(
+pub async fn get_checker_spec(
     State((_, app_state)): State<(ApiInfo, Arc<RwLock<AppState>>)>,
     Path(name): Path<String>,
-) -> (StatusCode, Json<Option<watcher::Spec>>) {
-    app_state.read().await.get_watcher(&name).map_or_else(
+) -> (StatusCode, Json<Option<checker::Spec>>) {
+    app_state.read().await.get_checker(&name).map_or_else(
         |_| (StatusCode::NOT_FOUND, Json(None)),
-        |watcher| (StatusCode::OK, Json(Some(watcher.spec))),
+        |checker| (StatusCode::OK, Json(Some(checker.spec))),
     )
 }
 
-pub async fn post_watcher_spec(
+pub async fn post_checker_spec(
     State((_, app_state)): State<(ApiInfo, Arc<RwLock<AppState>>)>,
     Path(name): Path<String>,
-    Json(spec): Json<watcher::Spec>,
-) -> (StatusCode, Json<Option<watcher::Spec>>) {
+    Json(spec): Json<checker::Spec>,
+) -> (StatusCode, Json<Option<checker::Spec>>) {
     app_state
         .write()
         .await
-        .add_watcher(name, spec.clone())
+        .add_checker(name, spec.clone())
         .map_or_else(
             |_| (StatusCode::CONFLICT, Json(None)),
             |()| (StatusCode::CREATED, Json(Some(spec))),
         )
 }
 
-pub async fn put_watcher_spec(
+pub async fn put_checker_spec(
     State((_, app_state)): State<(ApiInfo, Arc<RwLock<AppState>>)>,
     Path(name): Path<String>,
-    Json(spec): Json<watcher::Spec>,
-) -> (StatusCode, Json<Option<watcher::Spec>>) {
+    Json(spec): Json<checker::Spec>,
+) -> (StatusCode, Json<Option<checker::Spec>>) {
     app_state
         .write()
         .await
-        .get_watcher_with_sender_mut(&name)
+        .get_checker_with_sender_mut(&name)
         .map_or_else(
             |_| (StatusCode::NOT_FOUND, Json(None)),
-            |watcher| {
-                watcher.update_spec(spec.clone());
+            |checker| {
+                checker.update_spec(spec.clone());
                 (StatusCode::OK, Json(Some(spec)))
             },
         )
 }
 
-pub async fn get_watcher_statuses(
+pub async fn get_checker_statuses(
     State((_, app_state)): State<(ApiInfo, Arc<RwLock<AppState>>)>,
     Path(name): Path<String>,
 ) -> (
     StatusCode,
-    Json<Option<Vec<(DateTime<Local>, watcher::Status)>>>,
+    Json<Option<Vec<(DateTime<Local>, checker::Status)>>>,
 ) {
-    app_state.read().await.get_watcher(&name).map_or_else(
+    app_state.read().await.get_checker(&name).map_or_else(
         |_| (StatusCode::NOT_FOUND, Json(None)),
-        |watcher| (StatusCode::OK, Json(Some(watcher.statuses.collect()))),
+        |checker| (StatusCode::OK, Json(Some(checker.statuses.collect()))),
     )
 }
 
-pub async fn get_watcher_status(
+pub async fn get_checker_status(
     State((_, app_state)): State<(ApiInfo, Arc<RwLock<AppState>>)>,
     Path((name, index)): Path<(String, usize)>,
-) -> (StatusCode, Json<Option<(DateTime<Local>, watcher::Status)>>) {
-    app_state.read().await.get_watcher(&name).map_or_else(
+) -> (StatusCode, Json<Option<(DateTime<Local>, checker::Status)>>) {
+    app_state.read().await.get_checker(&name).map_or_else(
         |_| (StatusCode::NOT_FOUND, Json(None)),
-        |watcher| {
-            watcher.statuses.iter().rev().nth(index).map_or_else(
+        |checker| {
+            checker.statuses.iter().rev().nth(index).map_or_else(
                 || (StatusCode::NOT_FOUND, Json(None)),
                 |status| (StatusCode::OK, Json(Some(status.clone()))),
             )
@@ -151,15 +151,15 @@ pub async fn get_watcher_status(
     )
 }
 
-pub async fn post_watcher_status(
+pub async fn post_checker_status(
     State((_, app_state)): State<(ApiInfo, Arc<RwLock<AppState>>)>,
     Path(name): Path<String>,
-    Json(status): Json<watcher::Status>,
-) -> (StatusCode, Json<Option<watcher::Status>>) {
+    Json(status): Json<checker::Status>,
+) -> (StatusCode, Json<Option<checker::Status>>) {
     app_state
         .write()
         .await
-        .get_watcher_with_sender_mut(&name)
+        .get_checker_with_sender_mut(&name)
         .map_or_else(
             |_| (StatusCode::NOT_FOUND, Json(None)),
             |w| {
@@ -169,7 +169,7 @@ pub async fn post_watcher_status(
         )
 }
 
-pub async fn get_watcher_ws(
+pub async fn get_checker_ws(
     ws: WebSocketUpgrade,
     State((_, app_state)): State<(ApiInfo, Arc<RwLock<AppState>>)>,
     Path(name): Path<String>,
@@ -182,13 +182,13 @@ pub async fn get_watcher_ws(
     let res = app_state
         .read()
         .await
-        .get_watcher_with_sender(&name)
+        .get_checker_with_sender(&name)
         .map(|w| {
             (
                 w.subscribe(),
                 ApiMessage::Initial(
-                    w.watcher().spec.clone(),
-                    w.watcher().statuses.iter().next_back().cloned(),
+                    w.checker().spec.clone(),
+                    w.checker().statuses.iter().next_back().cloned(),
                 ),
             )
         });
@@ -249,148 +249,148 @@ pub async fn handle_ws(
 }
 
 pub struct AppState {
-    watchers: BTreeMap<String, WatcherWithSender>,
+    checkers: BTreeMap<String, CheckerWithSender>,
     history_len: usize,
 }
 
 impl AppState {
     pub fn new(
-        watchers: BTreeMap<String, watcher::Watcher<StatusRingBuffer>>,
+        checkers: BTreeMap<String, checker::Checker<StatusRingBuffer>>,
         history_len: usize,
     ) -> Self {
         Self {
-            watchers: watchers
+            checkers: checkers
                 .into_iter()
-                .map(|(k, v)| (k, WatcherWithSender::new(v)))
+                .map(|(k, v)| (k, CheckerWithSender::new(v)))
                 .collect(),
             history_len,
         }
     }
 
-    pub fn add_watcher(
+    pub fn add_checker(
         &mut self,
         name: String,
-        watcher_spec: watcher::Spec,
-    ) -> Result<(), WatcherAlreadyExists> {
-        if self.watchers.contains_key(&name) {
-            return Err(WatcherAlreadyExists);
+        checker_spec: checker::Spec,
+    ) -> Result<(), CheckerAlreadyExists> {
+        if self.checkers.contains_key(&name) {
+            return Err(CheckerAlreadyExists);
         }
-        self.watchers.insert(
+        self.checkers.insert(
             name,
-            WatcherWithSender::new(watcher::Watcher::new(
-                watcher_spec,
+            CheckerWithSender::new(checker::Checker::new(
+                checker_spec,
                 StatusRingBuffer::new(self.history_len),
             )),
         );
         Ok(())
     }
 
-    pub fn remove_watcher(
+    pub fn remove_checker(
         &mut self,
         name: &str,
-    ) -> Result<watcher::Watcher<StatusRingBuffer>, WatcherDoesNotExist> {
+    ) -> Result<checker::Checker<StatusRingBuffer>, CheckerDoesNotExist> {
         // TODO: do we need to make sure all websockets are closed?
-        //       => method in WatcherWithSender to close all websockets gracefully with a message
-        self.watchers
+        //       => method in CheckerWithSender to close all websockets gracefully with a message
+        self.checkers
             .remove(name)
-            .map(|w| w.watcher().clone())
-            .ok_or(WatcherDoesNotExist)
+            .map(|w| w.checker().clone())
+            .ok_or(CheckerDoesNotExist)
     }
 
-    pub fn get_watcher(
+    pub fn get_checker(
         &self,
         name: &str,
-    ) -> Result<watcher::Watcher<StatusRingBuffer>, WatcherDoesNotExist> {
-        self.get_watcher_with_sender(name)
-            .map(|w| w.watcher().clone())
+    ) -> Result<checker::Checker<StatusRingBuffer>, CheckerDoesNotExist> {
+        self.get_checker_with_sender(name)
+            .map(|w| w.checker().clone())
     }
 
-    pub fn get_watcher_with_sender(
+    pub fn get_checker_with_sender(
         &self,
         name: &str,
-    ) -> Result<&WatcherWithSender, WatcherDoesNotExist> {
-        self.watchers.get(name).ok_or(WatcherDoesNotExist)
+    ) -> Result<&CheckerWithSender, CheckerDoesNotExist> {
+        self.checkers.get(name).ok_or(CheckerDoesNotExist)
     }
 
-    pub fn get_watcher_with_sender_mut(
+    pub fn get_checker_with_sender_mut(
         &mut self,
         name: &str,
-    ) -> Result<&mut WatcherWithSender, WatcherDoesNotExist> {
-        self.watchers.get_mut(name).ok_or(WatcherDoesNotExist)
+    ) -> Result<&mut CheckerWithSender, CheckerDoesNotExist> {
+        self.checkers.get_mut(name).ok_or(CheckerDoesNotExist)
     }
 
-    pub fn get_watchers(&self) -> BTreeMap<String, watcher::Watcher<StatusRingBuffer>> {
-        self.watchers
+    pub fn get_checkers(&self) -> BTreeMap<String, checker::Checker<StatusRingBuffer>> {
+        self.checkers
             .iter()
-            .map(|(k, v)| (k.clone(), v.watcher().clone()))
+            .map(|(k, v)| (k.clone(), v.checker().clone()))
             .collect()
     }
 
-    pub fn watchers_to_json(&self) -> Result<String, serde_json::Error> {
-        let watchers: BTreeMap<String, watcher::Watcher<StatusRingBuffer>> = self
-            .watchers
+    pub fn checkers_to_json(&self) -> Result<String, serde_json::Error> {
+        let checkers: BTreeMap<String, checker::Checker<StatusRingBuffer>> = self
+            .checkers
             .iter()
-            .map(|(k, v)| (k.clone(), v.watcher().clone()))
+            .map(|(k, v)| (k.clone(), v.checker().clone()))
             .collect();
-        serde_json::to_string(&watchers)
+        serde_json::to_string(&checkers)
     }
 }
 
 #[derive(Debug)]
-pub struct WatcherAlreadyExists;
+pub struct CheckerAlreadyExists;
 #[derive(Debug)]
-pub struct WatcherDoesNotExist;
+pub struct CheckerDoesNotExist;
 
-mod watcher_with_sender {
+mod checker_with_sender {
     use super::StatusRingBuffer;
     use chrono::Local;
-    use swec_core::watcher;
+    use swec_core::checker;
     use swec_core::ApiMessage;
     use tracing::{debug, warn};
 
     #[derive(Debug)]
-    /// Encapsulates a `watcher::Watcher` with a `tokio::sync::broadcast::Sender` to send updates
+    /// Encapsulates a `checker::Checker` with a `tokio::sync::broadcast::Sender` to send updates
     /// to subscribers. This needs to be in a separate module for the privacy of the inner fields
-    /// (to that we don't modify a watcher without sending an update).
-    pub struct WatcherWithSender {
-        watcher: watcher::Watcher<StatusRingBuffer>,
+    /// (to that we don't modify a checker without sending an update).
+    pub struct CheckerWithSender {
+        checker: checker::Checker<StatusRingBuffer>,
         sender: tokio::sync::broadcast::Sender<ApiMessage>,
     }
 
-    impl WatcherWithSender {
-        pub fn new(watcher: watcher::Watcher<StatusRingBuffer>) -> Self {
+    impl CheckerWithSender {
+        pub fn new(checker: checker::Checker<StatusRingBuffer>) -> Self {
             let (sender, _) = tokio::sync::broadcast::channel(1); // TODO: what should the capacity be? allow changing it?
-            Self { watcher, sender }
+            Self { checker, sender }
         }
 
-        pub const fn watcher(&self) -> &watcher::Watcher<StatusRingBuffer> {
-            &self.watcher
+        pub const fn checker(&self) -> &checker::Checker<StatusRingBuffer> {
+            &self.checker
         }
 
         pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<ApiMessage> {
             self.sender.subscribe()
         }
 
-        pub fn update_spec(&mut self, spec: watcher::Spec) {
-            self.watcher.spec = spec.clone();
+        pub fn update_spec(&mut self, spec: checker::Spec) {
+            self.checker.spec = spec.clone();
             if let Err(e) = self.sender.send(ApiMessage::UpdatedSpec(spec)) {
                 warn!(target: "websockets", "Failed to send updated spec: {e}, ignoring.");
             }
         }
 
-        pub fn add_status(&mut self, status: watcher::Status) {
+        pub fn add_status(&mut self, status: checker::Status) {
             let time = Local::now();
-            self.watcher.statuses.push((time, status.clone()));
+            self.checker.statuses.push((time, status.clone()));
             if let Err(e) = self.sender.send(ApiMessage::AddedStatus(time, status)) {
                 debug!(target: "websockets", "Failed to send added status: {e}, ignoring.");
             }
         }
     }
 
-    impl Drop for WatcherWithSender {
+    impl Drop for CheckerWithSender {
         fn drop(&mut self) {
-            if let Err(e) = self.sender.send(ApiMessage::WatcherDeleted) {
-                warn!(target: "websockets", "Failed to send WatcherDropped: {e}, ignoring.");
+            if let Err(e) = self.sender.send(ApiMessage::CheckerDeleted) {
+                warn!(target: "websockets", "Failed to send CheckerDropped: {e}, ignoring.");
             }
         }
     }

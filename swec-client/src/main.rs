@@ -12,18 +12,18 @@ async fn main() {
     let client = ReadOnly::new(opts.base_url).unwrap();
     println!("{:?}", client.get_info().await.unwrap());
     match opts.subcmd {
-        Command::Get { watcher, what } => {
-            let watcher = watcher.unwrap();
+        Command::Get { checker, what } => {
+            let checker = checker.unwrap();
             match what {
                 What::Spec => {
-                    println!("{}", client.get_watcher_spec(&watcher).await.unwrap());
+                    println!("{}", client.get_checker_spec(&checker).await.unwrap());
                 }
                 What::Statuses => {
-                    println!("{:?}", client.get_watcher_statuses(&watcher).await.unwrap());
+                    println!("{:?}", client.get_checker_statuses(&checker).await.unwrap());
                 }
                 What::Watch => {
                     let (tx, mut rx) = mpsc::channel(32);
-                    println!("{:?}", client.watch_watcher(&watcher, tx).await);
+                    println!("{:?}", client.watch_checker(&checker, tx).await);
                     while let Some(status) = rx.recv().await {
                         println!("{status:?}");
                     }
@@ -50,8 +50,8 @@ enum Command {
     Get {
         /// What to get
         what: What,
-        /// The watcher to get data for
-        watcher: Option<String>,
+        /// The checker to get data for
+        checker: Option<String>,
     }, // TODO: post, put, delete
 }
 

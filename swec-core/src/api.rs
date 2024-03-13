@@ -1,4 +1,4 @@
-use crate::{watcher, Spec};
+use crate::{checker, Spec};
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 
@@ -10,8 +10,8 @@ pub struct Info {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Message {
-    UpdatedSpec(watcher::Spec),
-    AddedStatus(DateTime<Local>, watcher::Status),
-    Initial(Spec, Option<(DateTime<Local>, watcher::Status)>),
-    WatcherDeleted,
+    UpdatedSpec(checker::Spec),
+    AddedStatus(DateTime<Local>, checker::Status),
+    Initial(Spec, Option<(DateTime<Local>, checker::Status)>),
+    CheckerDeleted,
 }

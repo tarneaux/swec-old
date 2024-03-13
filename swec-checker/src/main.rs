@@ -7,13 +7,13 @@ use tracing::{debug, error, info, warn};
 async fn main() {
     tracing_subscriber::fmt::init();
     let args = Args::parse();
-    info!("Starting watcher: {}", args.name);
+    info!("Starting checker: {}", args.name);
     let client = swec_client::ReadWrite::new(args.api_url.clone()).unwrap_or_else(|e| {
         error!("Failed to create API client: {e}");
         std::process::exit(1);
     });
     debug!("API client created. API URL: {}", args.api_url);
-    debug!("Checking if watcher exists");
+    debug!("Checking if checker exists");
     let spec = swec_core::Spec {
         description: args.description.clone(),
         url: match &args.checker {
@@ -32,18 +32,18 @@ async fn main() {
         std::process::exit(1);
     }
 
-    if client.get_watcher(&args.name).await.is_err() {
-        info!("Watcher does not exist. Sending POST request to create it");
+    if client.get_checker(&args.name).await.is_err() {
+        info!("Checker does not exist. Sending POST request to create it");
         client
-            .post_watcher_spec(&args.name, spec)
+            .post_checker_spec(&args.name, spec)
             .await
             .unwrap_or_else(|e| {
-                error!("Failed to create watcher: {e}");
+                error!("Failed to create checker: {e}");
                 std::process::exit(1);
             });
     } else {
-        info!("Watcher already exists. Sending PUT request to update spec just in case");
-        client.put_watcher_spec(&args.name, spec).await.unwrap();
+        info!("Checker already exists. Sending PUT request to update spec just in case");
+        client.put_checker_spec(&args.name, spec).await.unwrap();
     }
 
     info!("Starting main loop");
@@ -53,7 +53,7 @@ async fn main() {
         let status = args.checker.check(args.timeout).await;
         debug!("Status of {}: {status}", args.name);
         client
-            .post_watcher_status(&args.name, status)
+            .post_checker_status(&args.name, status)
             .await
             .unwrap_or_else(|e| {
                 warn!("Failed to post status: {e}, ignoring.");
