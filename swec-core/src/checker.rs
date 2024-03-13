@@ -148,11 +148,7 @@ impl FromStr for Spec {
             .map(|x| x.1) // Get the part after the '#'
             .and_then(|s| s.split('@').next()) // And before the first '@'
             .map(ToString::to_string);
-        Ok(Self {
-            description: description.to_string(),
-            url,
-            group,
-        })
+        Ok(Self::new(description.to_string(), url, group))
     }
 }
 
