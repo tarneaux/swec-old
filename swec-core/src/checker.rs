@@ -77,7 +77,6 @@ impl<'de> Visitor<'de> for CheckerVisitor {
         }
         let spec = spec.ok_or_else(|| serde::de::Error::missing_field("spec"))?;
         let statuses = statuses.ok_or_else(|| serde::de::Error::missing_field("statuses"))?;
-        // TODO: conversion
         Ok(Checker { spec, statuses })
     }
 }
