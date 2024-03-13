@@ -17,7 +17,7 @@ use std::error::Error;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_stream::wrappers::BroadcastStream;
-use tracing::warn;
+use tracing::{info, warn};
 
 use swec_core::{watcher, ApiInfo, ApiMessage};
 
@@ -214,8 +214,7 @@ pub async fn handle_ws(
         tx.send(Message::Text(msg)).await?;
         Ok(())
     }
-
-    let (mut socket_tx, _) = socket.split();
+    let (mut socket_tx, mut socket_rx) = socket.split();
 
     let mut broadcast_rx = BroadcastStream::new(broadcast_rx);
 
@@ -225,18 +224,29 @@ pub async fn handle_ws(
             warn!(target: "websockets", "Failed to send initial message: {e}");
         });
 
-    while let Some(msg) = broadcast_rx.next().await {
-        match msg {
-            Ok(msg) => {
-                if let Err(e) = send(&mut socket_tx, msg).await {
-                    warn!(target: "websockets", "Failed to send message: {e}");
+    let handle = tokio::spawn(async move {
+        while let Some(msg) = broadcast_rx.next().await {
+            match msg {
+                Ok(msg) => {
+                    if let Err(e) = send(&mut socket_tx, msg).await {
+                        warn!(target: "websockets", "Failed to send websocket message: {e}");
+                        break;
+                    }
                 }
-            }
-            Err(e) => {
-                warn!(target: "websockets", "Failed to receive message: {e}");
-            }
-        };
-    }
+                Err(e) => {
+                    warn!(target: "websockets", "Failed to receive websocket message: {e}");
+                }
+            };
+        }
+        // Needed because we use socket_rx below, preventing the socket from being dropped
+        socket_tx.close().await.unwrap_or_else(|e| {
+            warn!(target: "websockets", "Failed to close websocket: {e}");
+        });
+    });
+
+    while socket_rx.next().await.is_some() {}
+    handle.abort();
+    info!(target: "websockets", "Websocket closed");
 }
 
 pub struct AppState {
