@@ -295,8 +295,6 @@ impl AppState {
         &mut self,
         name: &str,
     ) -> Result<checker::Checker<StatusRingBuffer>, CheckerDoesNotExist> {
-        // TODO: do we need to make sure all websockets are closed?
-        //       => method in CheckerWithSender to close all websockets gracefully with a message
         self.checkers
             .remove(name)
             .map(|w| w.checker().clone())
