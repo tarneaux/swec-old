@@ -9,11 +9,16 @@ pub struct Info {
     pub swec_version: String,
 }
 
+/// A message sent by the server to notify the client of an event on a checker.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Message {
+    /// The checker's spec was updated.
     UpdatedSpec(checker::Spec),
+    /// A status was added to the checker.
     AddedStatus(DateTime<Local>, checker::Status),
+    /// The checker's initial spec and status.
     Initial(Spec, Option<(DateTime<Local>, checker::Status)>),
+    /// The checker was deleted.
     CheckerDeleted,
 }
 
