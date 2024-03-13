@@ -193,11 +193,10 @@ pub async fn get_watcher_ws(
             )
         });
 
-    match res {
-        Ok((rx, initial_message)) => {
-            ws.on_upgrade(move |socket| handle_ws(socket, rx, initial_message))
-        }
-        Err(_) => StatusCode::NOT_FOUND.into_response(),
+    if let Ok((rx, initial_message)) = res {
+        ws.on_upgrade(move |socket| handle_ws(socket, rx, initial_message))
+    } else {
+        StatusCode::NOT_FOUND.into_response()
     }
 }
 
