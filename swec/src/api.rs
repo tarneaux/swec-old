@@ -394,7 +394,7 @@ mod checker_with_sender {
 
     impl Drop for CheckerWithSender {
         fn drop(&mut self) {
-            if let Err(e) = self.sender.send(ApiMessage::CheckerDeleted) {
+            if let Err(e) = self.sender.send(ApiMessage::CheckerDropped) {
                 warn!(target: "websockets", "Failed to send CheckerDropped: {e}, ignoring.");
             }
         }

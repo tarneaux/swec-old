@@ -18,8 +18,11 @@ pub enum Message {
     AddedStatus(DateTime<Local>, checker::Status),
     /// The checker's initial spec and status.
     Initial(Spec, Option<(DateTime<Local>, checker::Status)>),
-    /// The checker was deleted.
-    CheckerDeleted,
+    /// The checker was dropped by the server.
+    /// This should be the last message received for the checker; after this, the server will
+    /// either shut down or the watcher will be removed, both of which will result in the
+    /// websocket being closed.
+    CheckerDropped,
     /// The server lagged by the given number of messages which were dropped.
     Lagged(u64),
 }
@@ -38,7 +41,7 @@ impl Display for Message {
                 }
                 Ok(())
             }
-            Self::CheckerDeleted => write!(f, "Checker deleted"),
+            Self::CheckerDropped => write!(f, "Checker dropped by server"),
             Self::Lagged(n) => write!(f, "Server lagged and dropped {n} messages"),
         }
     }
