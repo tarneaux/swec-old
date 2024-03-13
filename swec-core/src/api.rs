@@ -20,6 +20,8 @@ pub enum Message {
     Initial(Spec, Option<(DateTime<Local>, checker::Status)>),
     /// The checker was deleted.
     CheckerDeleted,
+    /// The server lagged by the given number of messages which were dropped.
+    Lagged(u64),
 }
 
 impl Display for Message {
@@ -37,6 +39,7 @@ impl Display for Message {
                 Ok(())
             }
             Self::CheckerDeleted => write!(f, "Checker deleted"),
+            Self::Lagged(n) => write!(f, "Server lagged and dropped {n} messages"),
         }
     }
 }

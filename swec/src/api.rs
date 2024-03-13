@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream};
 use tracing::{info, warn};
 
 use swec_core::{checker, ApiInfo, ApiMessage};
@@ -232,9 +232,15 @@ pub async fn handle_ws(
                         break;
                     }
                 }
-                Err(e) => {
-                    warn!(target: "websockets", "Failed to receive websocket message: {e}");
-                }
+                Err(e) => match e {
+                    BroadcastStreamRecvError::Lagged(n) => {
+                        warn!(target: "websockets", "Lagged and skipped {n} messages. Informing client.");
+                        if let Err(e) = send(&mut socket_tx, ApiMessage::Lagged(n)).await {
+                            warn!(target: "websockets", "Failed to send Lagged message: {e}");
+                            break;
+                        }
+                    }
+                },
             };
         }
         // Needed because we use socket_rx below, preventing the socket from being dropped
@@ -359,7 +365,7 @@ mod checker_with_sender {
 
     impl CheckerWithSender {
         pub fn new(checker: checker::Checker<StatusRingBuffer>) -> Self {
-            let (sender, _) = tokio::sync::broadcast::channel(1); // TODO: what should the capacity be? allow changing it?
+            let (sender, _) = tokio::sync::broadcast::channel(16);
             Self { checker, sender }
         }
 
