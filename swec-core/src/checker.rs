@@ -88,44 +88,71 @@ pub struct Spec {
     pub description: String,
     /// URL of the service, if applicable
     pub url: Option<String>,
-    // TODO: service groups with a Group struct
+    /// A group the checker may belong to
+    pub group: Option<String>,
 }
 
 impl Spec {
     #[must_use]
-    pub const fn new(description: String, url: Option<String>) -> Self {
-        Self { description, url }
+    pub const fn new(description: String, url: Option<String>, group: Option<String>) -> Self {
+        Self {
+            description,
+            url,
+            group,
+        }
     }
 }
 
 impl Display for Spec {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.description)?;
-        if let Some(url) = &self.url {
-            write!(f, " ({url})")?;
-        }
+        write!(f, "{}", String::from(self))?;
         Ok(())
     }
 }
 
+impl From<&Spec> for String {
+    fn from(spec: &Spec) -> Self {
+        let mut s = spec.description.clone();
+        if let Some(url) = &spec.url {
+            s.push('@');
+            s.push_str(url);
+        }
+        if let Some(group) = &spec.group {
+            s.push('#');
+            s.push_str(group);
+        }
+        s
+    }
+}
+
+/// Create a `Spec` from a string.
+/// The string should be in the format `<description>[@<url>][#<group>]` or `<description>[#<group>][@<url>]`.
 impl FromStr for Spec {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let parts: Vec<&str> = s.splitn(2, '#').collect();
-        match parts.as_slice() {
-            [description, url] => Ok(Self {
-                description: (*description).to_string(),
-                url: Some((*url).to_string()),
-            }),
-            [description] => Ok(Self {
-                description: (*description).to_string(),
-                url: None,
-            }),
-            _ => Err(format!(
-                "Invalid spec: {s}. Expected format: <description>#<url>"
-            )),
+        // Verify that there are only one '@' and one '#' max
+        if s.matches('@').count() > 1 || s.matches('#').count() > 1 {
+            return Err(format!(
+                "Invalid spec: {s}. Expected format: <description>[@<url>][#<group>] or <description>[#<group>][@<url>]"
+            ));
         }
+        let description = s.split(&['@', '#']).next().unwrap(); // Get the part before any '@' or '#'
+        let url = s
+            .split_once('@')
+            .map(|x| x.1) // Get the part after the '@'
+            .and_then(|s| s.split('#').next()) // And before the first '#'
+            .map(ToString::to_string);
+        let group = s
+            .split_once('#')
+            .map(|x| x.1) // Get the part after the '#'
+            .and_then(|s| s.split('@').next()) // And before the first '@'
+            .map(ToString::to_string);
+        Ok(Self {
+            description: description.to_string(),
+            url,
+            group,
+        })
     }
 }
 

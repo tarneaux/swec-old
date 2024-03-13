@@ -19,6 +19,7 @@ async fn main() {
         url: match &args.checker {
             Checker::Http { url } => Some(url.to_string()),
         },
+        group: args.group.clone(),
     };
 
     let api_info = client.get_info().await.unwrap_or_else(|e| {
@@ -126,6 +127,8 @@ struct Args {
     name: String,
     description: String,
     checker: Checker,
+    #[clap(short, long)]
+    group: Option<String>,
     #[clap(short, long, default_value = "5")]
     interval: u64,
     #[clap(short, long, default_value = "10")]
