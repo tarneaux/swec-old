@@ -59,7 +59,7 @@ pub fn api_query(input: TokenStream) -> TokenStream {
     let gen = quote! {
         {
             let url = #url;
-            let url = url.parse::<reqwest::Url>().unwrap();
+            let url = url.parse::<reqwest::Url>().expect("Invalid URL used in API query");
             let response = self.client().#method(url)
                 #data_str
                 .send()
