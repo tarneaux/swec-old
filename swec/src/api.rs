@@ -295,6 +295,7 @@ impl AppState {
         &mut self,
         name: &str,
     ) -> Result<checker::Checker<StatusRingBuffer>, CheckerDoesNotExist> {
+        // The websockets will be gracefully closed when the CheckerWithSender is dropped.
         self.checkers
             .remove(name)
             .map(|w| w.checker().clone())
