@@ -137,16 +137,16 @@ impl FromStr for Spec {
                 "Invalid spec: {s}. Expected format: <description>[@<url>][#<group>] or <description>[#<group>][@<url>]"
             ));
         }
-        let description = s.split(&['@', '#']).next().unwrap(); // Get the part before any '@' or '#'
+        let description = s.split(&['@', '#']).next().unwrap();
         let url = s
             .split_once('@')
             .map(|x| x.1) // Get the part after the '@'
-            .and_then(|s| s.split('#').next()) // And before the first '#'
+            .and_then(|s| s.split('#').next()) // And before '#'
             .map(ToString::to_string);
         let group = s
             .split_once('#')
             .map(|x| x.1) // Get the part after the '#'
-            .and_then(|s| s.split('@').next()) // And before the first '@'
+            .and_then(|s| s.split('@').next()) // And before '@'
             .map(ToString::to_string);
         Ok(Self::new(description.to_string(), url, group))
     }
