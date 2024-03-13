@@ -377,4 +377,12 @@ mod watcher_with_sender {
             }
         }
     }
+
+    impl Drop for WatcherWithSender {
+        fn drop(&mut self) {
+            if let Err(e) = self.sender.send(ApiMessage::WatcherDeleted) {
+                warn!(target: "websockets", "Failed to send WatcherDropped: {e}, ignoring.");
+            }
+        }
+    }
 }

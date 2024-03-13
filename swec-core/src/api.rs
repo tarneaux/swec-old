@@ -13,4 +13,5 @@ pub enum Message {
     UpdatedSpec(watcher::Spec),
     AddedStatus(DateTime<Local>, watcher::Status),
     Initial(Spec, Option<(DateTime<Local>, watcher::Status)>),
+    WatcherDeleted,
 }
