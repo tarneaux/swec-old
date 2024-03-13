@@ -63,7 +63,8 @@ pub fn api_query(input: TokenStream) -> TokenStream {
             let response = self.client().#method(url)
                 #data_str
                 .send()
-                .await?;
+                .await?
+                .error_for_status()?;
             #json_str
         }
     };
