@@ -2,6 +2,7 @@ use chrono::{DateTime, Local};
 use serde::{de::Visitor, ser::SerializeMap, Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::{self, Display, Formatter};
+use std::str::FromStr;
 
 #[derive(Debug, Clone)]
 pub struct Watcher<Buffer: StatusBuffer> {
@@ -108,6 +109,27 @@ impl Display for Spec {
     }
 }
 
+impl FromStr for Spec {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts: Vec<&str> = s.splitn(2, '#').collect();
+        match parts.as_slice() {
+            [description, url] => Ok(Self {
+                description: (*description).to_string(),
+                url: Some((*url).to_string()),
+            }),
+            [description] => Ok(Self {
+                description: (*description).to_string(),
+                url: None,
+            }),
+            _ => Err(format!(
+                "Invalid spec: {s}. Expected format: <description>#<url>"
+            )),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Status {
     /// Whether the service is up or down
@@ -120,6 +142,27 @@ impl Display for Status {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let up_or_down = if self.is_up { "Up" } else { "Down" };
         write!(f, "{}: {}", up_or_down, self.message)
+    }
+}
+
+impl FromStr for Status {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts: Vec<&str> = s.splitn(2, '#').collect();
+        match parts.as_slice() {
+            ["up", message] => Ok(Self {
+                is_up: true,
+                message: (*message).to_string(),
+            }),
+            ["down", message] => Ok(Self {
+                is_up: false,
+                message: (*message).to_string(),
+            }),
+            _ => Err(format!(
+                "Invalid status: {s}. Expected format: <up|down>#<message>"
+            )),
+        }
     }
 }
 
