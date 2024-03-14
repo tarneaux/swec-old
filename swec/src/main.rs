@@ -192,14 +192,19 @@ async fn load_checkers(
     let mut file = tokio::fs::File::open(path).await?;
     let mut contents = Vec::new();
     file.read_to_end(&mut contents).await?;
+
     if contents.is_empty() {
         // We can safely say that the user has just cleared the file or just installed swec,
         // which means we can return an empty map.
         return Ok(BTreeMap::new());
     }
+
     let mut deserialized: BTreeMap<String, checker::Checker<StatusRingBuffer>> =
         serde_json::from_slice(&contents)?;
-    // Make sure the histories are all the correct length
+
+    // Make sure the histories all have the correct length, since deserializing a ring buffer
+    // doesn't guarantee that the history will be the correct length, plus the user might have
+    // changed the history length between saving and loading.
     for checker in deserialized.values_mut() {
         if truncate {
             checker.statuses.truncate_fifo(history_length);
@@ -210,5 +215,6 @@ async fn load_checkers(
                 .expect("Failed to resize checker history");
         }
     }
+
     Ok(deserialized)
 }
