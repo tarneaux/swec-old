@@ -102,6 +102,7 @@ async fn main() -> Result<()> {
     };
 
     // Wait for a server to shut down or for a stop signal to be received.
+    #[allow(clippy::redundant_pub_crate)]
     let end_message = tokio::select! {
         v = public_server => server_end_message(v),
         v = private_server => server_end_message(v),
@@ -167,7 +168,8 @@ async fn dumper_task(
         || signal(SignalKind::user_defined1()).expect("Failed to create signal for dumper task");
     let mut s = make_signal();
     loop {
-        tokio::select! {
+        #[allow(clippy::redundant_pub_crate, clippy::let_unit_value)]
+        let () = tokio::select! {
             v = s.recv() => {
                 if v.is_none() {
                     warn!("Cannot receive signals from this channel anymore, creating a new one");
@@ -176,7 +178,7 @@ async fn dumper_task(
                 info!("Received SIGUSR1, dumping checkers to file");
             }
             () = tokio::time::sleep(interval) => {}
-        }
+        };
         dump_checkers(&app_state, &mut writer)
             .await
             .unwrap_or_else(|e| {
