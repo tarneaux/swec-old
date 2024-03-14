@@ -163,14 +163,15 @@ async fn dumper_task(
     mut writer: BufWriter<File>,
     interval: Duration,
 ) -> ! {
-    let mut s =
-        signal(SignalKind::user_defined1()).expect("Failed to create signal for dumper task");
+    let make_signal =
+        || signal(SignalKind::user_defined1()).expect("Failed to create signal for dumper task");
+    let mut s = make_signal();
     loop {
         tokio::select! {
             v = s.recv() => {
                 if v.is_none() {
                     warn!("Cannot receive signals from this channel anymore, creating a new one");
-                    s = signal(SignalKind::user_defined1()).expect("Failed to create signal for dumper task");
+                    s = make_signal();
                 }
                 info!("Received SIGUSR1, dumping checkers to file");
             }
