@@ -53,9 +53,7 @@ async fn main() -> Result<()> {
     let app_state = Arc::new(RwLock::new(api::AppState::new(checkers, history_len)));
 
     let public_server = make_server(false, app_state.clone(), public_address, api_path).await?;
-
     let private_server = make_server(true, app_state.clone(), private_address, api_path).await?;
-
     let dumper = {
         let app_state = app_state.clone();
         let writer = BufWriter::new(state_writer.try_clone().await?);
@@ -64,16 +62,11 @@ async fn main() -> Result<()> {
 
     info!("Starting servers");
 
-    let server_end_message = |v| match v {
-        Ok(()) => "Server shut down without errors".to_string(),
-        Err(e) => format!("Server shut down with error: {e}"),
-    };
-
     // Wait for a server to shut down or for a stop signal to be received.
     #[allow(clippy::redundant_pub_crate)]
     let end_message = tokio::select! {
-        v = public_server => server_end_message(v),
-        v = private_server => server_end_message(v),
+        v = public_server => result_to_server_end_message(v),
+        v = private_server => result_to_server_end_message(v),
         _ = dumper => unreachable!(),
         () = wait_for_stop_signal() => "Interrupt received".to_string(),
     };
@@ -219,4 +212,11 @@ async fn restore_checkers(
     }
 
     Ok(deserialized)
+}
+
+fn result_to_server_end_message(r: Result<(), std::io::Error>) -> String {
+    match r {
+        Ok(()) => "Server shut down without errors".to_string(),
+        Err(e) => format!("Server shut down with error: {e}"),
+    }
 }
