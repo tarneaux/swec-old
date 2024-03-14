@@ -52,41 +52,9 @@ async fn main() -> Result<()> {
 
     let app_state = Arc::new(RwLock::new(api::AppState::new(checkers, history_len)));
 
-    let public_server = {
-        let router = Router::new()
-            .nest(api_path, api::read_only_router())
-            .with_state((
-                ApiInfo {
-                    writable: false,
-                    swec_version: VERSION.to_string(),
-                },
-                app_state.clone(),
-            ))
-            .layer(
-                TraceLayer::new_for_http()
-                    .make_span_with(DefaultMakeSpan::default().include_headers(true)),
-            );
-        let listener = tokio::net::TcpListener::bind(public_address).await?;
-        axum::serve(listener, router.into_make_service()).into_future()
-    };
+    let public_server = make_server(false, app_state.clone(), public_address, api_path).await?;
 
-    let private_server = {
-        let router = Router::new()
-            .nest(api_path, api::read_write_router())
-            .with_state((
-                ApiInfo {
-                    writable: true,
-                    swec_version: VERSION.to_string(),
-                },
-                app_state.clone(),
-            ))
-            .layer(
-                TraceLayer::new_for_http()
-                    .make_span_with(DefaultMakeSpan::default().include_headers(true)),
-            );
-        let listener = tokio::net::TcpListener::bind(private_address).await?;
-        axum::serve(listener, router.into_make_service()).into_future()
-    };
+    let private_server = make_server(true, app_state.clone(), private_address, api_path).await?;
 
     let dumper = {
         let app_state = app_state.clone();
@@ -120,6 +88,37 @@ async fn main() -> Result<()> {
         });
 
     Ok(())
+}
+
+async fn make_server(
+    can_write: bool,
+    app_state: Arc<RwLock<api::AppState>>,
+    address: &str,
+    api_path: &str,
+) -> Result<
+    impl core::future::Future<Output = std::result::Result<(), std::io::Error>>,
+    std::io::Error,
+> {
+    let api_info = ApiInfo {
+        writable: can_write,
+        swec_version: VERSION.to_string(),
+    };
+    let router = Router::new()
+        .nest(
+            api_path,
+            if can_write {
+                api::read_only_router()
+            } else {
+                api::read_write_router()
+            },
+        )
+        .with_state((api_info, app_state))
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(DefaultMakeSpan::default().include_headers(true)),
+        );
+    let listener = tokio::net::TcpListener::bind(address).await?;
+    Ok(axum::serve(listener, router.into_make_service()).into_future())
 }
 
 /// Wait for a stop signal to be received.
