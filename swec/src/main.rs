@@ -5,8 +5,10 @@ use std::future::IntoFuture;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+    fs::File,
+    io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufWriter, SeekFrom},
     sync::RwLock,
+    time::Duration,
 };
 use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 
@@ -27,6 +29,7 @@ async fn main() -> Result<()> {
     let public_address = "127.0.0.1:8080";
     let private_address = "127.0.0.1:8081";
     let api_path = "/api/v1";
+    let save_interval = Duration::from_secs(60);
 
     tracing_subscriber::fmt::init();
 
@@ -39,6 +42,12 @@ async fn main() -> Result<()> {
             warn!("Starting with an empty set of checkers");
             BTreeMap::new()
         });
+
+    let state_writer = tokio::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .open(checkers_path)
+        .await?;
 
     let app_state = Arc::new(RwLock::new(api::AppState::new(checkers, history_len)));
 
@@ -78,6 +87,12 @@ async fn main() -> Result<()> {
         axum::serve(listener, router.into_make_service()).into_future()
     };
 
+    let saver = {
+        let app_state = app_state.clone();
+        let writer = BufWriter::new(state_writer.try_clone().await?);
+        tokio::spawn(saver_task(app_state, writer, save_interval))
+    };
+
     info!("Starting servers");
 
     let server_end_message = |v| match v {
@@ -89,18 +104,18 @@ async fn main() -> Result<()> {
     let end_message = tokio::select! {
         v = public_server => server_end_message(v),
         v = private_server => server_end_message(v),
+        _ = saver => unreachable!(),
         () = wait_for_stop_signal() => "Interrupt received".to_string(),
     };
 
     info!("{end_message}");
 
-    info!("Saving checkers to file");
-
-    let res = app_state.read().await.checkers_to_json();
-    match res {
-        Ok(json) => save_checkers(checkers_path, json).await?,
-        Err(e) => warn!("Failed to save checkers to file: {e}"),
-    }
+    // Save the checkers to file before exiting
+    save_checkers(&app_state, &mut BufWriter::new(state_writer))
+        .await
+        .unwrap_or_else(|e| {
+            warn!("Failed to save checkers to file: {e}");
+        });
 
     Ok(())
 }
@@ -131,10 +146,30 @@ async fn wait_for_stop_signal() {
     futures::future::select_all(interrupt_futures).await;
 }
 
-async fn save_checkers(path: &Path, serialized: String) -> Result<()> {
-    let mut file = tokio::fs::File::create(path).await?;
-    file.write_all(serialized.as_bytes()).await?;
+async fn save_checkers(
+    app_state: &Arc<RwLock<api::AppState>>,
+    writer: &mut BufWriter<File>,
+) -> Result<()> {
+    info!("Saving checkers to file");
+    let serialized = app_state.read().await.checkers_to_json()?;
+    (*writer).seek(SeekFrom::Start(0)).await?; // super important, otherwise we just append to the file
+    (*writer).write_all(serialized.as_bytes()).await?;
     Ok(())
+}
+
+async fn saver_task(
+    app_state: Arc<RwLock<api::AppState>>,
+    mut writer: BufWriter<File>,
+    interval: Duration,
+) -> ! {
+    loop {
+        tokio::time::sleep(interval).await; // TODO: interrupt this sleep on SIGHUP
+        save_checkers(&app_state, &mut writer)
+            .await
+            .unwrap_or_else(|e| {
+                warn!("Failed to save checkers to file: {e}");
+            });
+    }
 }
 
 async fn load_checkers(
