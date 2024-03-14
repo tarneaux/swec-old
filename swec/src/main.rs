@@ -154,6 +154,7 @@ async fn save_checkers(
     let serialized = app_state.read().await.checkers_to_json()?;
     (*writer).seek(SeekFrom::Start(0)).await?; // super important, otherwise we just append to the file
     (*writer).write_all(serialized.as_bytes()).await?;
+    (*writer).flush().await?;
     Ok(())
 }
 
