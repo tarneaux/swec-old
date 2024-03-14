@@ -7,6 +7,7 @@ use std::sync::Arc;
 use tokio::{
     fs::File,
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufWriter, SeekFrom},
+    signal::unix::{signal, SignalKind},
     sync::RwLock,
     time::Duration,
 };
@@ -122,7 +123,6 @@ async fn main() -> Result<()> {
 
 /// Wait for a stop signal to be received.
 async fn wait_for_stop_signal() {
-    use tokio::signal::unix::{signal, SignalKind};
     let interrupt_signal_kinds = vec![
         SignalKind::alarm(),
         SignalKind::hangup(),
@@ -162,8 +162,19 @@ async fn saver_task(
     mut writer: BufWriter<File>,
     interval: Duration,
 ) -> ! {
+    let mut s =
+        signal(SignalKind::user_defined1()).expect("Failed to create signal for saver task");
     loop {
-        tokio::time::sleep(interval).await; // TODO: interrupt this sleep on SIGHUP
+        tokio::select! {
+            v = s.recv() => {
+                if v.is_none() {
+                    warn!("Cannot receive signals from this channel anymore, creating a new one");
+                    s = signal(SignalKind::user_defined1()).expect("Failed to create signal for saver task");
+                }
+                info!("Received SIGUSR1, saving checkers to file");
+            }
+            () = tokio::time::sleep(interval) => {}
+        }
         save_checkers(&app_state, &mut writer)
             .await
             .unwrap_or_else(|e| {
