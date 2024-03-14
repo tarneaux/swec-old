@@ -10,12 +10,14 @@ pub struct Info {
 }
 
 /// A message sent by the server to notify the client of an event on a checker.
+/// # Guarantees
+/// The server guarantees that the client will receive messages for all updates of a checker,
+/// unless there is a lag (See `Message::Lagged`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Message {
     /// The checker's initial spec and status.
     /// This is the first message received for a checker, and contains the spec and the first
-    /// status if it exists. Any changes from this point should be guaranteed to be sent to the
-    /// client receiving this message (e.g. through a websocket).
+    /// status if it exists.
     Initial(Spec, Option<(DateTime<Local>, checker::Status)>),
 
     /// The checker's spec was updated.
