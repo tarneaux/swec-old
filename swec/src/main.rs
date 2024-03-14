@@ -17,7 +17,7 @@ mod api;
 mod ringbuffer;
 pub use ringbuffer::{RingBuffer, StatusRingBuffer};
 use swec_core::{checker, ApiInfo};
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -39,9 +39,9 @@ async fn main() -> Result<()> {
     let checkers = load_checkers(checkers_path, history_len, truncate_histories)
         .await
         .unwrap_or_else(|e| {
-            warn!("Failed to restore checkers from file: {e}");
-            warn!("Starting with an empty set of checkers");
-            BTreeMap::new()
+            error!("Failed to restore checkers from file: {e}, exiting.");
+            error!("The only case where we will allow loading to fail is if the file is empty, in which case we will just start with no checkers.");
+            std::process::exit(1);
         });
 
     let state_writer = tokio::fs::OpenOptions::new()
@@ -192,6 +192,11 @@ async fn load_checkers(
     let mut file = tokio::fs::File::open(path).await?;
     let mut contents = Vec::new();
     file.read_to_end(&mut contents).await?;
+    if contents.is_empty() {
+        // We can safely say that the user has just cleared the file or just installed swec,
+        // which means we can return an empty map.
+        return Ok(BTreeMap::new());
+    }
     let mut deserialized: BTreeMap<String, checker::Checker<StatusRingBuffer>> =
         serde_json::from_slice(&contents)?;
     // Make sure the histories are all the correct length
