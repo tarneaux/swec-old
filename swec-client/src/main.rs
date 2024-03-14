@@ -7,129 +7,147 @@ use swec_core::{Spec, Status};
 use tokio::main;
 use tokio::sync::mpsc;
 
+const DEFAULT_URL_READ: &str = "http://localhost:8080/api/v1";
+const DEFAULT_URL_WRITE: &str = "http://localhost:8081/api/v1";
+
 #[main]
 async fn main() {
     let opts: Opts = Opts::parse();
     match opts.subcmd {
-        Command::Get { checker, what } => {
-            let base_url = opts
-                .base_url
-                .unwrap_or_else(|| "http://localhost:8080/api/v1".to_string());
-
-            let client = ReadOnly::new(base_url).expect("Failed to create API client");
-            client.get_info().await.expect("Failed to get API info");
-            match checker {
-                Some(checker) => match what {
-                    GetWhat::Spec => {
-                        println!(
-                            "{}",
-                            client
-                                .get_checker_spec(&checker)
-                                .await
-                                .expect("Failed to get checker spec")
-                        );
-                    }
-                    GetWhat::Statuses => {
-                        println!(
-                            "{:?}",
-                            client
-                                .get_checker_statuses(&checker)
-                                .await
-                                .expect("Failed to get checker statuses")
-                        );
-                    }
-                    GetWhat::Watch => {
-                        let (tx, mut rx) = mpsc::channel(32);
-                        println!("{:?}", client.watch_checker(&checker, tx).await);
-                        while let Some(status) = rx.recv().await {
-                            println!("{status}");
-                        }
-                    }
-                },
-                None => match what {
-                    GetWhat::Spec => {
-                        println!(
-                            "{:?}",
-                            client.get_checkers().await.expect("Failed to get checkers")
-                        );
-                    }
-                    GetWhat::Statuses => {
-                        println!(
-                            "{:?}",
-                            client
-                                .get_checkers()
-                                .await
-                                .expect("Failed to get checkers")
-                                .into_iter()
-                                .map(|(k, v)| (k, v.statuses))
-                                .collect::<Vec<_>>()
-                        );
-                    }
-                    GetWhat::Watch => {
-                        eprintln!("Warning: while we can watch all checkers that currently exist at once, we cannot watch for new checkers being created."); // TODO: Make this possible in API
-                        let checkers = client
-                            .get_checker_names()
-                            .await
-                            .expect("Failed to get checkers");
-                        let (tx, mut rx) = mpsc::channel(32);
-                        for checker in checkers {
-                            // We want to map v to (name, v) in the channel.
-                            let tx = tx.clone();
-                            let (mapper_tx, mut mapper_rx) = mpsc::channel(32);
-                            let checker_cloned = checker.clone();
-                            tokio::spawn(async move {
-                                while let Some(v) = mapper_rx.recv().await {
-                                    tx.send((checker_cloned.clone(), v))
-                                        .await
-                                        .expect("Failed to send (checker, status) after mapping");
-                                }
-                            });
-                            println!(
-                                "{checker}: {:?}",
-                                client.watch_checker(&checker, mapper_tx).await
-                            );
-                        }
-                        while let Some(v) = rx.recv().await {
-                            let (checker, status) = v;
-                            println!("{checker}: {status}");
-                        }
-                    }
-                },
-            }
-        }
-        v => {
-            let base_url = opts
-                .base_url
-                .unwrap_or_else(|| "http://localhost:8081/api/v1".to_string());
-            let client = ReadWrite::new(base_url).expect("Failed to create API client");
-            let api_info = client.get_info().await.unwrap_or_else(|e| {
-                eprintln!("Failed to get API info: {e}");
-                std::process::exit(1);
+        Command::Get {
+            ref checker,
+            ref what,
+        } => {
+            let base_url = opts.base_url.unwrap_or_else(|| {
+                eprintln!("No base URL specified. Using default: {DEFAULT_URL_READ}");
+                DEFAULT_URL_READ.to_string()
             });
-            if !api_info.writable {
-                eprintln!(
-                    "This API endpoint, while being a valid SWEC API, is not writable. Exiting."
-                );
-                std::process::exit(1);
-            }
-            match v {
-                Command::Post { checker, what } => match what {
-                    PostWhat::Spec { spec } => {
-                        println!("{:?}", client.post_checker_spec(&checker, spec).await);
-                    }
-                    PostWhat::Status { status } => {
-                        println!("{:?}", client.post_checker_status(&checker, status).await);
-                    }
-                },
-                Command::Delete { checker } => {
-                    println!("{:?}", client.delete_checker(&checker).await);
-                }
-                Command::Put { checker, spec } => {
-                    println!("{:?}", client.put_checker_spec(&checker, spec).await);
-                }
-                Command::Get { .. } => unreachable!(), // already handled above
-            }
+
+            handle_get(base_url, checker, what).await;
         }
+        cmd => {
+            let base_url = opts.base_url.unwrap_or_else(|| {
+                eprintln!("No base URL specified. Using default: {DEFAULT_URL_WRITE}");
+                DEFAULT_URL_WRITE.to_string()
+            });
+            handle_write(base_url, cmd).await;
+        }
+    }
+}
+
+async fn handle_get(base_url: String, checker: &Option<String>, what: &GetWhat) {
+    let client = ReadOnly::new(base_url).expect("Failed to create API client");
+    client.get_info().await.expect("Failed to get API info");
+    match checker {
+        Some(checker) => match what {
+            GetWhat::Spec => {
+                println!(
+                    "{}",
+                    client
+                        .get_checker_spec(checker)
+                        .await
+                        .expect("Failed to get checker spec")
+                );
+            }
+            GetWhat::Statuses => {
+                println!(
+                    "{:?}",
+                    client
+                        .get_checker_statuses(checker)
+                        .await
+                        .expect("Failed to get checker statuses")
+                );
+            }
+            GetWhat::Watch => {
+                let (tx, mut rx) = mpsc::channel(32);
+                println!("{:?}", client.watch_checker(checker, tx).await);
+                while let Some(status) = rx.recv().await {
+                    println!("{status}");
+                }
+            }
+        },
+        None => match what {
+            GetWhat::Spec => {
+                println!(
+                    "{:?}",
+                    client.get_checkers().await.expect("Failed to get checkers")
+                );
+            }
+            GetWhat::Statuses => {
+                println!(
+                    "{:?}",
+                    client
+                        .get_checkers()
+                        .await
+                        .expect("Failed to get checkers")
+                        .into_iter()
+                        .map(|(k, v)| (k, v.statuses))
+                        .collect::<Vec<_>>()
+                );
+            }
+            GetWhat::Watch => {
+                watch_multiple(client).await;
+            }
+        },
+    }
+}
+
+async fn handle_write(base_url: String, cmd: Command) {
+    let client = ReadWrite::new(base_url).expect("Failed to create API client");
+    let api_info = client.get_info().await.unwrap_or_else(|e| {
+        eprintln!("Failed to get API info: {e}");
+        std::process::exit(1);
+    });
+    if !api_info.writable {
+        eprintln!("This API endpoint, while being a valid SWEC API, is not writable. Exiting.");
+        std::process::exit(1);
+    }
+    match cmd {
+        Command::Post { checker, what } => match what {
+            PostWhat::Spec { spec } => {
+                println!("{:?}", client.post_checker_spec(&checker, spec).await);
+            }
+            PostWhat::Status { status } => {
+                println!("{:?}", client.post_checker_status(&checker, status).await);
+            }
+        },
+        Command::Delete { checker } => {
+            println!("{:?}", client.delete_checker(&checker).await);
+        }
+        Command::Put { checker, spec } => {
+            println!("{:?}", client.put_checker_spec(&checker, spec).await);
+        }
+        Command::Get { .. } => unreachable!(), // already handled above
+    }
+}
+
+async fn watch_multiple(client: ReadOnly) {
+    eprintln!("Warning: while we can watch all checkers that currently exist at once, we cannot watch for new checkers being created."); // TODO: Make this possible in API
+    let checkers = client
+        .get_checker_names()
+        .await
+        .expect("Failed to get checkers");
+    let (tx, mut rx) = mpsc::channel(32);
+    for checker in checkers {
+        // We want to map v to (name, v) in the channel.
+        let tx = tx.clone();
+        let (mapper_tx, mut mapper_rx) = mpsc::channel(32);
+        let checker_cloned = checker.clone();
+        tokio::spawn(async move {
+            while let Some(v) = mapper_rx.recv().await {
+                tx.send((checker_cloned.clone(), v))
+                    .await
+                    .expect("Failed to send (checker, status) after mapping");
+            }
+        });
+        println!(
+            "{checker}: {:?}",
+            client.watch_checker(&checker, mapper_tx).await
+        );
+    }
+    while let Some(v) = rx.recv().await {
+        let (checker, status) = v;
+        println!("{checker}: {status}");
     }
 }
 
