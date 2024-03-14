@@ -28,6 +28,7 @@ pub fn read_only_router() -> axum::Router<(ApiInfo, Arc<RwLock<AppState>>)> {
     axum::Router::new()
         .route("/info", get(get_api_info))
         .route("/checkers", get(get_checkers))
+        .route("/checker_names", get(get_checker_names))
         .route("/checkers/:name", get(get_checker))
         .route("/checkers/:name/spec", get(get_checker_spec))
         .route("/checkers/:name/statuses", get(get_checker_statuses))
@@ -58,6 +59,12 @@ pub async fn get_checkers(
 ) {
     let checkers = app_state.read().await.get_checkers();
     (StatusCode::OK, Json(checkers))
+}
+
+pub async fn get_checker_names(
+    State((_, app_state)): State<(ApiInfo, Arc<RwLock<AppState>>)>,
+) -> Json<Vec<String>> {
+    Json(app_state.read().await.checkers.keys().cloned().collect())
 }
 
 pub async fn get_checker(

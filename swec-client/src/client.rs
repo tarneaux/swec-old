@@ -4,7 +4,7 @@ use futures_util::StreamExt;
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
-use swec_core::{ApiInfo, ApiMessage, Spec, Status, VecBuffer, Checker};
+use swec_core::{ApiInfo, ApiMessage, Checker, Spec, Status, VecBuffer};
 use tokio::sync::mpsc::Sender;
 use tokio::task::JoinHandle;
 use tokio_tungstenite::connect_async;
@@ -109,6 +109,10 @@ pub trait ReadApi: Api {
 
     async fn get_checkers(&self) -> Result<BTreeMap<String, Checker<VecBuffer>>, ApiError> {
         api_query!(get, format!("{}/checkers", self.base_url()), true)
+    }
+
+    async fn get_checker_names(&self) -> Result<Vec<String>, ApiError> {
+        api_query!(get, format!("{}/checker_names", self.base_url()), true)
     }
 
     async fn get_checker(&self, name: &str) -> Result<Checker<VecBuffer>, ApiError> {
