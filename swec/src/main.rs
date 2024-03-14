@@ -24,23 +24,23 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[tokio::main]
 async fn main() -> Result<()> {
     // TODO: config file and/or command line arguments
-    let checkers_path = Path::new("checkers.json");
+    let checkers_path = Path::new("swec_dump.json");
     let history_len = 3600;
     let truncate_histories = false;
     let public_address = "127.0.0.1:8080";
     let private_address = "127.0.0.1:8081";
     let api_path = "/api/v1";
-    let save_interval = Duration::from_secs(60);
+    let dump_interval = Duration::from_secs(60);
 
     tracing_subscriber::fmt::init();
 
-    info!("Restoring checkers from file");
+    info!("Restoring checkers from dump file");
 
-    let checkers = load_checkers(checkers_path, history_len, truncate_histories)
+    let checkers = restore_checkers(checkers_path, history_len, truncate_histories)
         .await
         .unwrap_or_else(|e| {
-            error!("Failed to restore checkers from file: {e}, exiting.");
-            error!("The only case where we will allow loading to fail is if the file is empty, in which case we will just start with no checkers.");
+            error!("Failed to restore checkers from dump file: {e}, exiting.");
+            error!("The only case where we will allow restoring to fail is if the file is empty, in which case we will just start with no checkers.");
             std::process::exit(1);
         });
 
@@ -88,10 +88,10 @@ async fn main() -> Result<()> {
         axum::serve(listener, router.into_make_service()).into_future()
     };
 
-    let saver = {
+    let dumper = {
         let app_state = app_state.clone();
         let writer = BufWriter::new(state_writer.try_clone().await?);
-        tokio::spawn(saver_task(app_state, writer, save_interval))
+        tokio::spawn(dumper_task(app_state, writer, dump_interval))
     };
 
     info!("Starting servers");
@@ -105,17 +105,17 @@ async fn main() -> Result<()> {
     let end_message = tokio::select! {
         v = public_server => server_end_message(v),
         v = private_server => server_end_message(v),
-        _ = saver => unreachable!(),
+        _ = dumper => unreachable!(),
         () = wait_for_stop_signal() => "Interrupt received".to_string(),
     };
 
     info!("{end_message}");
 
     // Save the checkers to file before exiting
-    save_checkers(&app_state, &mut BufWriter::new(state_writer))
+    dump_checkers(&app_state, &mut BufWriter::new(state_writer))
         .await
         .unwrap_or_else(|e| {
-            warn!("Failed to save checkers to file: {e}");
+            warn!("Failed to dump checkers to file: {e}");
         });
 
     Ok(())
@@ -146,7 +146,7 @@ async fn wait_for_stop_signal() {
     futures::future::select_all(interrupt_futures).await;
 }
 
-async fn save_checkers(
+async fn dump_checkers(
     app_state: &Arc<RwLock<api::AppState>>,
     writer: &mut BufWriter<File>,
 ) -> Result<()> {
@@ -158,33 +158,33 @@ async fn save_checkers(
     Ok(())
 }
 
-async fn saver_task(
+async fn dumper_task(
     app_state: Arc<RwLock<api::AppState>>,
     mut writer: BufWriter<File>,
     interval: Duration,
 ) -> ! {
     let mut s =
-        signal(SignalKind::user_defined1()).expect("Failed to create signal for saver task");
+        signal(SignalKind::user_defined1()).expect("Failed to create signal for dumper task");
     loop {
         tokio::select! {
             v = s.recv() => {
                 if v.is_none() {
                     warn!("Cannot receive signals from this channel anymore, creating a new one");
-                    s = signal(SignalKind::user_defined1()).expect("Failed to create signal for saver task");
+                    s = signal(SignalKind::user_defined1()).expect("Failed to create signal for dumper task");
                 }
-                info!("Received SIGUSR1, saving checkers to file");
+                info!("Received SIGUSR1, dumping checkers to file");
             }
             () = tokio::time::sleep(interval) => {}
         }
-        save_checkers(&app_state, &mut writer)
+        dump_checkers(&app_state, &mut writer)
             .await
             .unwrap_or_else(|e| {
-                warn!("Failed to save checkers to file: {e}");
+                warn!("Failed to dump checkers to file: {e}");
             });
     }
 }
 
-async fn load_checkers(
+async fn restore_checkers(
     path: &Path,
     history_length: usize,
     truncate: bool,
@@ -204,7 +204,7 @@ async fn load_checkers(
 
     // Make sure the histories all have the correct length, since deserializing a ring buffer
     // doesn't guarantee that the history will be the correct length, plus the user might have
-    // changed the history length between saving and loading.
+    // changed the history length between dumping and restoring.
     for checker in deserialized.values_mut() {
         if truncate {
             checker.statuses.truncate_fifo(history_length);
