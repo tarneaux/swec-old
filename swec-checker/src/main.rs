@@ -44,7 +44,10 @@ async fn main() {
             });
     } else {
         info!("Checker already exists. Sending PUT request to update spec just in case");
-        client.put_checker_spec(&args.name, spec).await.unwrap();
+        client
+            .put_checker_spec(&args.name, spec)
+            .await
+            .expect("Failed to update checker");
     }
 
     info!("Starting main loop");
@@ -76,7 +79,7 @@ impl Checker {
                 let client = reqwest::Client::builder()
                     .timeout(std::time::Duration::from_secs(timeout))
                     .build()
-                    .unwrap();
+                    .expect("Failed to create HTTP client");
                 match client.get(url.clone()).send().await {
                     Ok(response) => {
                         if response.status().is_success() {

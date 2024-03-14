@@ -18,21 +18,83 @@ async fn main() {
 
             let client = ReadOnly::new(base_url).expect("Failed to create API client");
             client.get_info().await.expect("Failed to get API info");
-            let checker = checker.unwrap();
-            match what {
-                GetWhat::Spec => {
-                    println!("{}", client.get_checker_spec(&checker).await.unwrap());
-                }
-                GetWhat::Statuses => {
-                    println!("{:?}", client.get_checker_statuses(&checker).await.unwrap());
-                }
-                GetWhat::Watch => {
-                    let (tx, mut rx) = mpsc::channel(32);
-                    println!("{:?}", client.watch_checker(&checker, tx).await);
-                    while let Some(status) = rx.recv().await {
-                        println!("{status}");
+            match checker {
+                Some(checker) => match what {
+                    GetWhat::Spec => {
+                        println!(
+                            "{}",
+                            client
+                                .get_checker_spec(&checker)
+                                .await
+                                .expect("Failed to get checker spec")
+                        );
                     }
-                }
+                    GetWhat::Statuses => {
+                        println!(
+                            "{:?}",
+                            client
+                                .get_checker_statuses(&checker)
+                                .await
+                                .expect("Failed to get checker statuses")
+                        );
+                    }
+                    GetWhat::Watch => {
+                        let (tx, mut rx) = mpsc::channel(32);
+                        println!("{:?}", client.watch_checker(&checker, tx).await);
+                        while let Some(status) = rx.recv().await {
+                            println!("{status}");
+                        }
+                    }
+                },
+                None => match what {
+                    GetWhat::Spec => {
+                        println!(
+                            "{:?}",
+                            client.get_checkers().await.expect("Failed to get checkers")
+                        );
+                    }
+                    GetWhat::Statuses => {
+                        println!(
+                            "{:?}",
+                            client
+                                .get_checkers()
+                                .await
+                                .expect("Failed to get checkers")
+                                .into_iter()
+                                .map(|(k, v)| (k, v.statuses))
+                                .collect::<Vec<_>>()
+                        );
+                    }
+                    GetWhat::Watch => {
+                        eprintln!("Warning: while we can watch all checkers that currently exist at once, we cannot watch for new checkers being created."); // TODO: Make this possible in API
+                        let checkers = client
+                            .get_checker_names()
+                            .await
+                            .expect("Failed to get checkers");
+                        let (tx, mut rx) = mpsc::channel(32);
+                        for checker in checkers {
+                            // We want to map v to (name, v) in the channel.
+                            let tx = tx.clone();
+                            let (mapper_tx, mut mapper_rx) = mpsc::channel(32);
+                            let checker_cloned = checker.clone();
+                            tokio::spawn(async move {
+                                while let Some(v) = mapper_rx.recv().await {
+                                    tx.send((checker_cloned.clone(), v))
+                                        .await
+                                        .expect("Failed to send (checker, status) after mapping");
+                                }
+                            });
+                            println!(
+                                "{checker}: {:?}",
+                                client.watch_checker(&checker, mapper_tx).await
+                            );
+                        }
+                        while let Some(v) = rx.recv().await {
+                            let (checker, status) = v;
+                            println!("{checker}: {status}");
+                        }
+                    }
+                },
             }
         }
         v => {

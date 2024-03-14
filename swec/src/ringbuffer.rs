@@ -291,13 +291,14 @@ mod tests {
     #[test]
     fn test_serialize() {
         let rb = RingBuffer::<i32>::new(5);
-        let serialized = serde_json::to_string(&rb).unwrap();
+        let serialized = serde_json::to_string(&rb).expect("Failed to serialize");
         assert_eq!(serialized, "[]");
     }
 
     #[test]
     fn test_deserialize() {
-        let rb: RingBuffer<i32> = serde_json::from_str("[1,2,3,4,5,6,7]").unwrap();
+        let rb: RingBuffer<i32> =
+            serde_json::from_str("[1,2,3,4,5,6,7]").expect("Failed to deserialize");
         assert_eq!(
             rb.iter().copied().collect::<Vec<_>>(),
             vec![1, 2, 3, 4, 5, 6, 7]

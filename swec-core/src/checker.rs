@@ -137,7 +137,10 @@ impl FromStr for Spec {
                 "Invalid spec: {s}. Expected format: <description>[@<url>][#<group>] or <description>[#<group>][@<url>]"
             ));
         }
-        let description = s.split(&['@', '#']).next().unwrap();
+        let description = s
+            .split(&['@', '#'])
+            .next()
+            .expect("Should have at least one part");
         let url = s
             .split_once('@')
             .map(|x| x.1) // Get the part after the '@'
