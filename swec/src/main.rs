@@ -1,6 +1,6 @@
 use axum::Router;
-use color_eyre::eyre::Result;
 use std::collections::BTreeMap;
+use std::error::Error;
 use std::future::IntoFuture;
 use std::path::Path;
 use std::sync::Arc;
@@ -22,7 +22,7 @@ use tracing::{error, info, warn};
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // TODO: config file and/or command line arguments
     let checkers_path = Path::new("swec_dump.json");
     let history_len = 3600;
@@ -142,7 +142,7 @@ async fn wait_for_stop_signal() {
 async fn dump_checkers(
     app_state: &Arc<RwLock<api::AppState>>,
     writer: &mut BufWriter<File>,
-) -> Result<()> {
+) -> Result<(), Box<dyn Error>> {
     info!("Saving checkers to file");
     let serialized = app_state.read().await.checkers_to_json()?;
     (*writer).seek(SeekFrom::Start(0)).await?; // super important, otherwise we just append to the file
@@ -183,7 +183,7 @@ async fn restore_checkers(
     path: &Path,
     history_length: usize,
     truncate: bool,
-) -> Result<BTreeMap<String, checker::Checker<StatusRingBuffer>>> {
+) -> Result<BTreeMap<String, checker::Checker<StatusRingBuffer>>, Box<dyn Error>> {
     let mut file = tokio::fs::File::open(path).await?;
     let mut contents = Vec::new();
     file.read_to_end(&mut contents).await?;
