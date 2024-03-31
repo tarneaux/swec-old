@@ -153,11 +153,11 @@ pub trait ReadApi: Api {
     ) -> Result<JoinHandle<()>, WsError> {
         let (ws_stream, _) =
             connect_async(format!("{}/checkers/{}/watch", self.ws_base_url(), name)).await?;
-        let (_, mut read) = ws_stream.split();
+        let (_, mut ws_rx) = ws_stream.split();
 
         // Spawn a new task that will forward messages from the websocket to the channel
         Ok(tokio::spawn(async move {
-            while let Some(msg) = read.next().await {
+            while let Some(msg) = ws_rx.next().await {
                 async fn f(
                     msg: Result<Message, tokio_tungstenite::tungstenite::Error>,
                     channel: &Sender<ApiMessage>,
