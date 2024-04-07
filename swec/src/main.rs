@@ -47,6 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state_writer = tokio::fs::OpenOptions::new()
         .write(true)
         .create(true)
+        .truncate(false)
         .open(checkers_path)
         .await?;
 
