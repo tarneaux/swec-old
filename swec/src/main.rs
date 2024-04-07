@@ -100,9 +100,9 @@ async fn make_server(
         .nest(
             api_path,
             if can_write {
-                api::read_only_router()
-            } else {
                 api::read_write_router()
+            } else {
+                api::read_only_router()
             },
         )
         .with_state((api_info, app_state))
