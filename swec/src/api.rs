@@ -363,7 +363,7 @@ mod checker_with_sender {
     #[derive(Debug)]
     /// Encapsulates a `checker::Checker` with a `tokio::sync::broadcast::Sender` to send updates
     /// to subscribers. This needs to be in a separate module for the privacy of the inner fields
-    /// (to that we don't modify a checker without sending an update).
+    /// (so that we don't modify a checker without sending an update).
     pub struct CheckerWithSender {
         checker: checker::Checker<StatusRingBuffer>,
         sender: tokio::sync::broadcast::Sender<ApiMessage>,
