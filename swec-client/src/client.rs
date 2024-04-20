@@ -1,10 +1,13 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Local};
 use futures_util::StreamExt;
+use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
-use swec_core::{ApiInfo, ApiMessage, Checker, Spec, Status, VecBuffer};
+use swec_core::{
+    ApiInfo, ApiMessage, Checker, CheckerMessage, ListMessage, Spec, Status, VecBuffer,
+};
 use tokio::sync::mpsc::Sender;
 use tokio::task::JoinHandle;
 use tokio_tungstenite::connect_async;
@@ -149,33 +152,45 @@ pub trait ReadApi: Api {
     async fn watch_checker(
         &self,
         name: &str,
-        channel: Sender<ApiMessage>,
+        channel: Sender<CheckerMessage>,
     ) -> Result<JoinHandle<()>, WsError> {
-        let (ws_stream, _) =
-            connect_async(format!("{}/checkers/{}/watch", self.ws_base_url(), name)).await?;
-        let (_, mut ws_rx) = ws_stream.split();
-
-        // Spawn a new task that will forward messages from the websocket to the channel
-        Ok(tokio::spawn(async move {
-            while let Some(msg) = ws_rx.next().await {
-                async fn f(
-                    msg: Result<Message, tokio_tungstenite::tungstenite::Error>,
-                    channel: &Sender<ApiMessage>,
-                ) -> Result<(), Box<dyn Error>> {
-                    let msg = msg?;
-                    let msg_text = msg.to_text()?;
-                    let status = serde_json::from_str(msg_text)?;
-                    channel.send(status).await?;
-                    Ok(())
-                }
-
-                if let Err(e) = f(msg, &channel).await {
-                    // TODO: What are the possible errors here? Should we exit the task for some of them?
-                    warn!("Error reading from websocket: {e}, ignoring");
-                }
-            }
-        }))
+        let url = format!("{}/checkers/{}/watch", self.ws_base_url(), name);
+        watch(url, channel).await
     }
+
+    async fn watch_list(&self, channel: Sender<ListMessage>) -> Result<JoinHandle<()>, WsError> {
+        let url = format!("{}/watch", self.ws_base_url());
+        watch(url, channel).await
+    }
+}
+
+async fn watch<T: ApiMessage + for<'a> Deserialize<'a> + 'static>(
+    url: String,
+    channel: Sender<T>,
+) -> Result<JoinHandle<()>, WsError> {
+    let (ws_stream, _) = connect_async(url).await?;
+    let (_, mut ws_rx) = ws_stream.split();
+
+    // Spawn a new task that will forward messages from the websocket to the channel
+    Ok(tokio::spawn(async move {
+        while let Some(msg) = ws_rx.next().await {
+            async fn f<T: for<'a> Deserialize<'a> + 'static>(
+                msg: Result<Message, tokio_tungstenite::tungstenite::Error>,
+                channel: &Sender<T>,
+            ) -> Result<(), Box<dyn Error>> {
+                let msg = msg?;
+                let msg_text = msg.to_text()?;
+                let status = serde_json::from_str(msg_text)?;
+                channel.send(status).await?;
+                Ok(())
+            }
+
+            if let Err(e) = f(msg, &channel).await {
+                // TODO: What are the possible errors here? Should we exit the task for some of them?
+                warn!("Error reading from websocket: {e}, ignoring");
+            }
+        }
+    }))
 }
 
 #[async_trait]

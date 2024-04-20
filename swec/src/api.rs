@@ -12,16 +12,18 @@ use axum::{
 use chrono::{DateTime, Local};
 use futures::stream::SplitSink;
 use futures::{SinkExt, StreamExt};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream};
 use tracing::{info, warn};
 
-use swec_core::{checker, ApiInfo, ApiMessage};
+use swec_core::{checker, ApiInfo, ApiMessage, CheckerMessage, ListMessage};
 
 pub use checker_with_sender::CheckerWithSender;
+
+use self::btreemap_with_sender::BTreeMapWithSender;
 
 // The read-only API.
 pub fn read_only_router() -> axum::Router<(ApiInfo, Arc<RwLock<AppState>>)> {
@@ -29,6 +31,7 @@ pub fn read_only_router() -> axum::Router<(ApiInfo, Arc<RwLock<AppState>>)> {
         .route("/info", get(get_api_info))
         .route("/checkers", get(get_checkers))
         .route("/checker_names", get(get_checker_names))
+        .route("/watch", get(get_global_ws))
         .route("/checkers/:name", get(get_checker))
         .route("/checkers/:name/spec", get(get_checker_spec))
         .route("/checkers/:name/statuses", get(get_checker_statuses))
@@ -193,7 +196,7 @@ pub async fn get_checker_ws(
         .map(|w| {
             (
                 w.subscribe(),
-                ApiMessage::Initial(
+                CheckerMessage::Initial(
                     w.checker().spec.clone(),
                     w.checker().statuses.iter().next_back().cloned(),
                 ),
@@ -207,14 +210,31 @@ pub async fn get_checker_ws(
     }
 }
 
-pub async fn handle_ws(
+pub async fn get_global_ws(
+    ws: WebSocketUpgrade,
+    State((_, app_state)): State<(ApiInfo, Arc<RwLock<AppState>>)>,
+) -> impl IntoResponse {
+    let (rx, initial_checkers): (
+        tokio::sync::broadcast::Receiver<ListMessage>,
+        BTreeSet<String>,
+    ) = {
+        let c = &app_state.read().await.checkers;
+        (c.subscribe(), c.keys().cloned().collect())
+    };
+
+    let initial_message = ListMessage::Initial(initial_checkers);
+
+    ws.on_upgrade(move |socket| handle_ws(socket, rx, initial_message))
+}
+
+pub async fn handle_ws<M: ApiMessage + 'static>(
     socket: WebSocket,
-    broadcast_rx: tokio::sync::broadcast::Receiver<ApiMessage>,
-    initial_message: ApiMessage,
+    broadcast_rx: tokio::sync::broadcast::Receiver<M>,
+    initial_message: M,
 ) {
-    async fn send(
+    async fn send<M: serde::Serialize + Send>(
         tx: &mut SplitSink<WebSocket, Message>,
-        msg: ApiMessage,
+        msg: M,
     ) -> Result<(), Box<dyn Error>> {
         let msg = serde_json::to_string(&msg)?;
         tx.send(Message::Text(msg)).await?;
@@ -242,7 +262,7 @@ pub async fn handle_ws(
                 Err(e) => match e {
                     BroadcastStreamRecvError::Lagged(n) => {
                         warn!(target: "websockets", "Lagged and skipped {n} messages. Informing client.");
-                        if let Err(e) = send(&mut socket_tx, ApiMessage::Lagged(n)).await {
+                        if let Err(e) = send(&mut socket_tx, CheckerMessage::Lagged(n)).await {
                             warn!(target: "websockets", "Failed to send Lagged message: {e}");
                             break;
                         }
@@ -262,7 +282,7 @@ pub async fn handle_ws(
 }
 
 pub struct AppState {
-    checkers: BTreeMap<String, CheckerWithSender>,
+    checkers: BTreeMapWithSender<CheckerWithSender>,
     history_len: usize,
 }
 
@@ -275,7 +295,8 @@ impl AppState {
             checkers: checkers
                 .into_iter()
                 .map(|(k, v)| (k, CheckerWithSender::new(v)))
-                .collect(),
+                .collect::<BTreeMap<String, CheckerWithSender>>()
+                .into(),
             history_len,
         }
     }
@@ -285,7 +306,7 @@ impl AppState {
         name: String,
         checker_spec: checker::Spec,
     ) -> Result<(), CheckerAlreadyExists> {
-        if self.checkers.contains_key(&name) {
+        if self.checkers.inner().contains_key(&name) {
             return Err(CheckerAlreadyExists);
         }
         self.checkers.insert(
@@ -321,7 +342,7 @@ impl AppState {
         &self,
         name: &str,
     ) -> Result<&CheckerWithSender, CheckerDoesNotExist> {
-        self.checkers.get(name).ok_or(CheckerDoesNotExist)
+        self.checkers.inner().get(name).ok_or(CheckerDoesNotExist)
     }
 
     pub fn get_checker_with_sender_mut(
@@ -333,6 +354,7 @@ impl AppState {
 
     pub fn get_checkers(&self) -> BTreeMap<String, checker::Checker<StatusRingBuffer>> {
         self.checkers
+            .inner()
             .iter()
             .map(|(k, v)| (k.clone(), v.checker().clone()))
             .collect()
@@ -341,6 +363,7 @@ impl AppState {
     pub fn checkers_to_json(&self) -> Result<String, serde_json::Error> {
         let checkers: BTreeMap<String, checker::Checker<StatusRingBuffer>> = self
             .checkers
+            .inner()
             .iter()
             .map(|(k, v)| (k.clone(), v.checker().clone()))
             .collect();
@@ -353,11 +376,82 @@ pub struct CheckerAlreadyExists;
 #[derive(Debug)]
 pub struct CheckerDoesNotExist;
 
+mod btreemap_with_sender {
+    use std::collections::{btree_map, BTreeMap};
+    use swec_core::ListMessage;
+    use tracing::warn;
+
+    #[derive(Debug)]
+    pub struct BTreeMapWithSender<T> {
+        btreemap: BTreeMap<String, T>,
+        sender: tokio::sync::broadcast::Sender<ListMessage>,
+    }
+
+    impl<T> BTreeMapWithSender<T> {
+        #[must_use]
+        pub fn new() -> Self {
+            Self {
+                btreemap: BTreeMap::new(),
+                sender: tokio::sync::broadcast::channel(16).0,
+            }
+        }
+
+        pub fn keys(&self) -> btree_map::Keys<'_, std::string::String, T> {
+            self.btreemap.keys()
+        }
+
+        pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<ListMessage> {
+            self.sender.subscribe()
+        }
+
+        pub const fn inner(&self) -> &BTreeMap<String, T> {
+            &self.btreemap
+        }
+
+        pub fn get_mut(&mut self, key: &str) -> Option<&mut T> {
+            self.btreemap.get_mut(key)
+        }
+
+        pub fn insert(&mut self, key: String, value: T) -> Option<T> {
+            let r = self.btreemap.insert(key.clone(), value);
+            let msg = match r {
+                Some(_) => ListMessage::InsertReplace(key),
+                None => ListMessage::Insert(key),
+            };
+            if let Err(e) = self.sender.send(msg) {
+                warn!(target: "websockets", "Failed to send msg: {e}, ignoring.");
+            }
+            r
+        }
+
+        pub fn remove(&mut self, key: &str) -> Option<T> {
+            match self.btreemap.remove(key) {
+                Some(v) => {
+                    if let Err(e) = self.sender.send(ListMessage::Remove(key.to_string())) {
+                        warn!(target: "websockets", "Failed to send Remove: {e}, ignoring.");
+                    }
+                    Some(v)
+                }
+                None => None,
+            }
+        }
+    }
+
+    impl<T> From<BTreeMap<String, T>> for BTreeMapWithSender<T> {
+        fn from(btreemap: BTreeMap<String, T>) -> Self {
+            Self {
+                btreemap,
+                sender: tokio::sync::broadcast::channel(16).0,
+            }
+        }
+    }
+}
+
 mod checker_with_sender {
     use super::StatusRingBuffer;
     use chrono::Local;
     use swec_core::checker;
-    use swec_core::ApiMessage;
+    use swec_core::CheckerMessage;
     use tracing::{debug, warn};
 
     #[derive(Debug)]
@@ -366,7 +460,7 @@ mod checker_with_sender {
     /// (so that we don't modify a checker without sending an update).
     pub struct CheckerWithSender {
         checker: checker::Checker<StatusRingBuffer>,
-        sender: tokio::sync::broadcast::Sender<ApiMessage>,
+        sender: tokio::sync::broadcast::Sender<CheckerMessage>,
     }
 
     impl CheckerWithSender {
@@ -379,13 +473,13 @@ mod checker_with_sender {
             &self.checker
         }
 
-        pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<ApiMessage> {
+        pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<CheckerMessage> {
             self.sender.subscribe()
         }
 
         pub fn update_spec(&mut self, spec: checker::Spec) {
             self.checker.spec = spec.clone();
-            if let Err(e) = self.sender.send(ApiMessage::UpdatedSpec(spec)) {
+            if let Err(e) = self.sender.send(CheckerMessage::UpdatedSpec(spec)) {
                 warn!(target: "websockets", "Failed to send updated spec: {e}, ignoring.");
             }
         }
@@ -393,7 +487,7 @@ mod checker_with_sender {
         pub fn add_status(&mut self, status: checker::Status) {
             let time = Local::now();
             self.checker.statuses.push((time, status.clone()));
-            if let Err(e) = self.sender.send(ApiMessage::AddedStatus(time, status)) {
+            if let Err(e) = self.sender.send(CheckerMessage::AddedStatus(time, status)) {
                 debug!(target: "websockets", "Failed to send added status: {e}, ignoring.");
             }
         }
@@ -401,7 +495,7 @@ mod checker_with_sender {
 
     impl Drop for CheckerWithSender {
         fn drop(&mut self) {
-            if let Err(e) = self.sender.send(ApiMessage::CheckerDropped) {
+            if let Err(e) = self.sender.send(CheckerMessage::CheckerDropped) {
                 warn!(target: "websockets", "Failed to send CheckerDropped: {e}, ignoring.");
             }
         }

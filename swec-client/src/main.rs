@@ -3,7 +3,7 @@ use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 use swec_client::client::{Api, ReadApi, ReadOnly, ReadWrite, WriteApi};
-use swec_core::{Spec, Status};
+use swec_core::{CheckerMessage, ListMessage, Spec, Status};
 use tokio::main;
 use tokio::sync::mpsc;
 
@@ -122,30 +122,52 @@ async fn handle_write(base_url: String, cmd: Command) {
 }
 
 async fn watch_multiple(client: ReadOnly) {
-    eprintln!("Warning: while we can watch all checkers that currently exist at once, we cannot watch for new checkers being created."); // TODO: Make this possible in API
-    let checkers = client
-        .get_checker_names()
-        .await
-        .expect("Failed to get checkers");
-    let (tx, mut rx) = mpsc::channel(32);
-    for checker in checkers {
-        // We want to map v to (name, v) in the channel.
-        let tx = tx.clone();
-        let (mapper_tx, mut mapper_rx) = mpsc::channel(32);
-        let checker_cloned = checker.clone();
-        tokio::spawn(async move {
-            while let Some(v) = mapper_rx.recv().await {
-                tx.send((checker_cloned.clone(), v))
-                    .await
-                    .expect("Failed to send (checker, status) after mapping");
+    let (list_tx, mut list_rx) = mpsc::channel(32);
+    println!("{:?}", client.watch_list(list_tx).await);
+    let (checkers_tx, mut checkers_rx) = mpsc::channel(32);
+
+    tokio::spawn(async move {
+        async fn add_checker(
+            checker_name: String,
+            checkers_tx: mpsc::Sender<(String, CheckerMessage)>,
+            client: ReadOnly,
+        ) {
+            let (mapper_tx, mut mapper_rx) = mpsc::channel(32);
+            let checker_name_cloned = checker_name.clone();
+            tokio::spawn(async move {
+                while let Some(v) = mapper_rx.recv().await {
+                    checkers_tx
+                        .send((checker_name_cloned.clone(), v))
+                        .await
+                        .expect("Failed to send (checker, status) after mapping.");
+                }
+            });
+            println!(
+                "{checker_name}: {:?}",
+                client.watch_checker(&checker_name, mapper_tx).await
+            )
+        }
+
+        while let Some(v) = list_rx.recv().await {
+            match v {
+                ListMessage::Initial(checker_names) => {
+                    for checker_name in checker_names {
+                        add_checker(checker_name, checkers_tx.clone(), client.clone()).await;
+                    }
+                }
+                ListMessage::Insert(checker_name) => {
+                    add_checker(checker_name, checkers_tx.clone(), client.clone()).await;
+                }
+                // TODO: Lagged should also give a new initial message, allowing us to add new checkers
+                // anyway.
+                ListMessage::Remove(_) | ListMessage::InsertReplace(_) => {}
+                ListMessage::Lagged(count) => {
+                    println!("The server lagged behind by {count} messages, we may not have the full list of checkers anymore.");
+                }
             }
-        });
-        println!(
-            "{checker}: {:?}",
-            client.watch_checker(&checker, mapper_tx).await
-        );
-    }
-    while let Some(v) = rx.recv().await {
+        }
+    });
+    while let Some(v) = checkers_rx.recv().await {
         let (checker, status) = v;
         println!("{checker}: {status}");
     }
