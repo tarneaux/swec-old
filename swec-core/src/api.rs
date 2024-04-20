@@ -36,7 +36,6 @@ pub enum CheckerMessage {
     /// The server lagged by the given number of messages which were dropped.
     /// This means the guarantee of receiving all updates for the checker is broken, and the client
     /// should consider the checker to be in an unknown state.
-    /// TODO: send a new `CheckerMessage::Initial message inside this one
     Lagged(u64),
 }
 
@@ -87,7 +86,6 @@ pub enum ListMessage {
     /// The server lagged by the given number of messages which were dropped.
     /// This means the guarantee of receiving all updates for the checker is broken, and the client
     /// should consider the list of checkers to be in an unknown state.
-    /// TODO: send a new `GlobalMessage::Initial` inside this one
     Lagged(u64),
 }
 

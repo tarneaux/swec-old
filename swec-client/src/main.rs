@@ -158,8 +158,6 @@ async fn watch_multiple(client: ReadOnly) {
                 ListMessage::Insert(checker_name) => {
                     add_checker(checker_name, checkers_tx.clone(), client.clone()).await;
                 }
-                // TODO: Lagged should also give a new initial message, allowing us to add new checkers
-                // anyway.
                 ListMessage::Remove(_) | ListMessage::InsertReplace(_) => {}
                 ListMessage::Lagged(count) => {
                     println!("The server lagged behind by {count} messages, we may not have the full list of checkers anymore.");
